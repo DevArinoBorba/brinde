@@ -685,3 +685,79 @@ h1, h2, h3, h4, h5, h6, .font-heading {
 [hidden] {
   display: none !important;
 }
+
+/* Produtos sem preço (sob consulta) */
+html:not(.catalog-ready) [data-product-section] [data-listing-product-id] .pt-3.mt-auto {
+  visibility: hidden; /* evita piscar o preço do HTML estático antes dos dados do banco */
+}
+.price-on-request {
+  font-size: 1.25rem !important;
+  line-height: 1.75rem !important;
+  color: hsl(var(--brand-forest)) !important;
+}
+span.cta-whatsapp {
+  background-color: #25D366 !important;
+  border-color: #25D366 !important;
+  color: #FFFFFF !important;
+}
+.group:hover span.cta-whatsapp {
+  background-color: #16A34A !important;
+  border-color: #16A34A !important;
+}
+
+/* Meu Orçamento: gaveta lateral direita. As classes arbitrárias do Tailwind usadas no
+   markup gerado por JS (max-w-[440px], bg-[#FFFFFF]...) não existem no CSS compilado. */
+#gordinho-cart-drawer {
+  z-index: 200; /* acima da barra de categorias fixa e do botão flutuante do WhatsApp */
+}
+#gordinho-cart-drawer > div {
+  width: 100%;
+  max-width: 440px;
+  background: #FFFFFF;
+  box-shadow: -20px 0 50px -20px rgba(6, 24, 14, 0.45);
+  animation: quoteDrawerIn 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+#gordinho-cart-drawer > div > div:first-child {
+  background: #06180E;
+}
+#gordinho-cart-drawer .text-gray-300 {
+  color: #CBD5E1;
+}
+#gordinho-cart-drawer .text-gray-800 {
+  color: #1F2937;
+}
+#gordinho-cart-drawer .border-gray-100 {
+  border-color: #F3F4F6;
+}
+#gordinho-cart-drawer #btn-close-cart-drawer:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+#gordinho-cart-drawer #btn-clear-cart:hover {
+  color: #EF4444;
+}
+#gordinho-cart-drawer #btn-cart-whatsapp-checkout:hover {
+  background: #20BD5A;
+}
+@keyframes quoteDrawerIn {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Contador de itens no ícone de "Meu Orçamento" */
+.quote-count-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  background: #FAB818;
+  color: #0A2717;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px #FFFFFF;
+}

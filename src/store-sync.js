@@ -162,6 +162,8 @@ export function renderProducts({ allowCreate = true } = {}) {
     });
   });
 
+  // Libera a área de preço dos cards (fica oculta até os dados do banco chegarem)
+  document.documentElement.classList.add('catalog-ready');
   return needsCreate;
 }
 
@@ -200,18 +202,35 @@ function hydrateCard(slide, product) {
   renderSwatches(slide.querySelector('[aria-label="Cores disponíveis"]'), product);
 
   // "Economize até X%"
+  const onRequest = db.isPriceOnRequest(product);
   const saveBadge = [...slide.querySelectorAll('span')].find((s) => s.textContent.trim() === 'Economize até');
   if (saveBadge) {
     const wrapper = saveBadge.parentElement;
     const pct = wrapper.lastElementChild;
     if (pct && pct !== saveBadge) pct.textContent = `${product.maxDiscount || 0}%`;
-    wrapper.parentElement.hidden = !product.maxDiscount;
+    wrapper.parentElement.hidden = onRequest || !product.maxDiscount;
   }
 
+  // Preço (ou "Sob consulta"), "/un.", texto de referência/Pix e tabela de faixas
   const priceEl = slide.querySelector('.text-xl.md\\:text-3xl');
-  if (priceEl) priceEl.textContent = formatBRL(db.getUnitPriceForQty(product, 100));
+  if (priceEl) {
+    priceEl.textContent = onRequest ? 'Sob consulta' : formatBRL(db.getUnitPriceForQty(product, 100));
+    priceEl.classList.toggle('price-on-request', onRequest);
+    if (priceEl.nextElementSibling) priceEl.nextElementSibling.hidden = onRequest;
+    const priceNotes = priceEl.parentElement?.nextElementSibling;
+    if (priceNotes) priceNotes.hidden = onRequest;
+  }
+  const tiersBlock = slide.querySelector('.divide-y')?.closest('.mt-4');
+  if (tiersBlock) tiersBlock.hidden = onRequest;
+  if (!onRequest) renderTiers(slide.querySelector('.divide-y'), product);
 
-  renderTiers(slide.querySelector('.divide-y'), product);
+  // Botão do card: "Ver mais" vira "Consultar no WhatsApp" (abre o modal para escolher qtd/cor e pôr na sacola)
+  const ctaEl = [...slide.querySelectorAll('span')].find((s) => s.dataset.ctaLabel || /^(Ver mais|Consultar no WhatsApp)$/.test(s.textContent.trim()));
+  if (ctaEl) {
+    ctaEl.dataset.ctaLabel = 'true';
+    ctaEl.textContent = onRequest ? 'Consultar no WhatsApp' : 'Ver mais';
+    ctaEl.classList.toggle('cta-whatsapp', onRequest);
+  }
 
   // Estoque
   const card = link || slide;

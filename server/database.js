@@ -35,6 +35,10 @@ const SCHEMA = `
     data       BYTEA NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
+  CREATE TABLE IF NOT EXISTS migrations (
+    id         TEXT PRIMARY KEY,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
   CREATE TABLE IF NOT EXISTS secrets (
     key        TEXT PRIMARY KEY,
     value      TEXT NOT NULL,
@@ -89,7 +93,32 @@ export async function openDatabase() {
   const db = await connect();
   await db.exec(SCHEMA);
   await seed(db);
+  await migrate(db);
   return db;
+}
+
+// Ajustes de dados que rodam uma única vez por banco (registrados na tabela migrations)
+const MIGRATIONS = [
+  {
+    // Pedido da loja (2026-11-11): todos os produtos do catálogo passam a "preço sob consulta".
+    // Os preços originais continuam em src/seed-data.js (histórico do git).
+    id: '2026-11-11-produtos-sob-consulta',
+    sql: `UPDATE products
+          SET data = data || '{"basePrice":0,"originalPrice":0,"maxDiscount":0,"tiers":[],"priceOnRequest":true}'::jsonb,
+              updated_at = now()`,
+  },
+];
+
+async function migrate(db) {
+  for (const migration of MIGRATIONS) {
+    const { rows } = await db.query('SELECT 1 FROM migrations WHERE id = $1', [migration.id]);
+    if (rows.length) continue;
+    await db.transaction(async (tx) => {
+      await tx.query(migration.sql);
+      await tx.query('INSERT INTO migrations (id) VALUES ($1)', [migration.id]);
+    });
+    console.log(`[db] migração aplicada: ${migration.id}`);
+  }
 }
 
 // Popula catálogo e configurações apenas na primeira execução (tabelas vazias)

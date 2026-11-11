@@ -1,5 +1,11 @@
 // Gordinho Brindes — regra de preço por faixa de quantidade (compartilhada entre loja e servidor)
 
+/** Produto cadastrado sem preço: a loja mostra "sob consulta" e o valor é passado no WhatsApp. */
+export function isPriceOnRequest(product) {
+  if (!product) return false;
+  return product.priceOnRequest === true || !(parseFloat(product.basePrice) > 0);
+}
+
 export function unitPriceForQty(product, qty = 100) {
   if (!product) return 0;
   const nQty = Math.max(1, parseInt(qty, 10) || 1);

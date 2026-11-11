@@ -493,8 +493,8 @@ function renderProductRows(products) {
       <td><code style="background: #F1F5F9; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #0F3822;">${prod.sku || '-'}</code></td>
       <td><span class="admin-badge badge-gray">${escapeHtml(prod.category || 'Geral')}</span></td>
       <td>
-        <div style="font-weight: 800; color: #16A34A;">R$ ${parseFloat(prod.basePrice).toFixed(2).replace('.', ',')}</div>
-        ${prod.originalPrice ? `<div style="font-size: 10px; text-decoration: line-through; color: #94A3B8;">R$ ${parseFloat(prod.originalPrice).toFixed(2).replace('.', ',')}</div>` : ''}
+        <div style="font-weight: 800; color: #16A34A;">${db.isPriceOnRequest(prod) ? 'Sob consulta' : `R$ ${parseFloat(prod.basePrice).toFixed(2).replace('.', ',')}`}</div>
+        ${prod.originalPrice && !db.isPriceOnRequest(prod) ? `<div style="font-size: 10px; text-decoration: line-through; color: #94A3B8;">R$ ${parseFloat(prod.originalPrice).toFixed(2).replace('.', ',')}</div>` : ''}
       </td>
       <td>
         ${prod.maxDiscount ? `<span class="admin-badge badge-green">-${prod.maxDiscount}%</span>` : '-'}
@@ -628,7 +628,7 @@ function renderOrderRows(orders) {
           ${o.items.map(it => `<div><strong>${it.quantity}x</strong> ${escapeHtml(it.name)}</div>`).join('')}
         </td>
         <td>
-          <strong style="color: #16A34A; font-size: 14px;">R$ ${parseFloat(o.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+          <strong style="color: #16A34A; font-size: 14px;">R$ ${parseFloat(o.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>${o.hasPriceOnRequest ? `<div style="font-size: 10px; color: #B45309; font-weight: 700;">+ sob consulta</div>` : ''}
           <div style="font-size: 10px; color: #64748B;">${escapeHtml(o.paymentMethod || 'À vista')}</div>
         </td>
         <td>
@@ -1114,9 +1114,9 @@ function openProductModal(productId = null) {
 
           <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px;">
             <div class="admin-form-group">
-              <label class="admin-form-label">Preço Base (R$) *</label>
-              <input type="number" step="0.01" id="prod-price" class="admin-input" required value="${product.basePrice}">
-              <div class="admin-form-help">Preço para 100 un.</div>
+              <label class="admin-form-label">Preço Base (R$)</label>
+              <input type="number" step="0.01" min="0" id="prod-price" class="admin-input" placeholder="Sob consulta" value="${db.isPriceOnRequest(product) ? '' : product.basePrice}">
+              <div class="admin-form-help">Preço para 100 un. Vazio = "Sob consulta" (cliente orça pelo WhatsApp).</div>
             </div>
 
             <div class="admin-form-group">
@@ -1543,8 +1543,8 @@ window.viewOrderDetails = (orderId) => {
                 <tr>
                   <td><strong>${escapeHtml(it.name)}</strong> ${it.color ? `<span style="font-size: 11px; color: #64748B;">(${escapeHtml(it.color)})</span>` : ''}</td>
                   <td>${it.quantity} un.</td>
-                  <td>R$ ${parseFloat(it.unitPrice).toFixed(2).replace('.', ',')}</td>
-                  <td><strong style="color: #16A34A;">R$ ${(it.quantity * it.unitPrice).toFixed(2).replace('.', ',')}</strong></td>
+                  <td>${it.priceOnRequest ? 'Sob consulta' : `R$ ${parseFloat(it.unitPrice).toFixed(2).replace('.', ',')}`}</td>
+                  <td><strong style="color: #16A34A;">${it.priceOnRequest ? 'A orçar' : `R$ ${(it.quantity * it.unitPrice).toFixed(2).replace('.', ',')}`}</strong></td>
                 </tr>
               `).join('')}
             </tbody>
@@ -1560,6 +1560,7 @@ window.viewOrderDetails = (orderId) => {
               <div style="font-size: 18px; font-weight: 800; color: #16A34A;">
                 R$ ${parseFloat(order.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
+              ${order.hasPriceOnRequest ? `<div style="font-size: 11px; color: #B45309; font-weight: 700;">+ itens sob consulta (a orçar)</div>` : ''}
             </div>
           </div>
 

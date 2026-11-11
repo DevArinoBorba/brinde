@@ -3,7 +3,7 @@
 // memória para que leituras continuem síncronas; gravações do painel vão para a API e, em caso de
 // erro, o cache é recarregado do servidor. Sacola, favoritos e perfil do cliente ficam no navegador.
 import { DEFAULT_CATEGORIES, DEFAULT_PRODUCTS, DEFAULT_SETTINGS } from './seed-data.js';
-import { unitPriceForQty } from './pricing.js';
+import { unitPriceForQty, isPriceOnRequest } from './pricing.js';
 
 const API_BASE = '/api';
 
@@ -183,6 +183,10 @@ class Database {
     return unitPriceForQty(product, qty);
   }
 
+  isPriceOnRequest(product) {
+    return isPriceOnRequest(product);
+  }
+
   buildDefaultTiers(basePrice, originalPrice, maxDiscount = 60) {
     const bp = parseFloat(basePrice) || 19.90;
     const op = parseFloat(originalPrice) || parseFloat((bp * 2.5).toFixed(2));
@@ -202,11 +206,15 @@ class Database {
     const existing = existingIndex >= 0 ? products[existingIndex] : null;
 
     const basePrice = parseFloat(productData.basePrice) || 0;
-    const originalPrice = parseFloat(productData.originalPrice) || parseFloat((basePrice * 2.2).toFixed(2));
-    const maxDiscount = parseInt(productData.maxDiscount, 10) || Math.max(0, Math.round((1 - basePrice / originalPrice) * 100));
+    // Sem preço no admin: produto "sob consulta" (sem faixas; valor combinado no WhatsApp)
+    const priceOnRequest = !(basePrice > 0);
+    const originalPrice = priceOnRequest ? 0 : parseFloat(productData.originalPrice) || parseFloat((basePrice * 2.2).toFixed(2));
+    const maxDiscount = priceOnRequest ? 0 : parseInt(productData.maxDiscount, 10) || Math.max(0, Math.round((1 - basePrice / originalPrice) * 100));
 
     let tiers = productData.tiers || (existing ? existing.tiers : null);
-    if (!Array.isArray(tiers) || tiers.length === 0) {
+    if (priceOnRequest) {
+      tiers = [];
+    } else if (!Array.isArray(tiers) || tiers.length === 0) {
       tiers = this.buildDefaultTiers(basePrice, originalPrice, maxDiscount);
     } else if (existing && existing.basePrice !== basePrice && !productData.customTiersEdited) {
       // Scale tiers proportionally when basePrice is changed in Admin
@@ -227,6 +235,7 @@ class Database {
       basePrice,
       originalPrice,
       maxDiscount,
+      priceOnRequest,
       stockQuantity: parseInt(productData.stockQuantity ?? (existing ? existing.stockQuantity : 1000), 10) || 0,
       sections,
       tiers,
@@ -271,17 +280,20 @@ class Database {
     const qty = Math.max(1, parseInt(quantity, 10) || 100);
     const selectedColor = color || (product.colorNames?.[0]?.name) || 'Padrão';
 
+    const priceOnRequest = isPriceOnRequest(product);
     const existingIndex = cart.findIndex(item => item.productId === product.id && item.color === selectedColor);
     if (existingIndex >= 0) {
       const newQty = cart[existingIndex].quantity + qty;
-      const unitPrice = this.getUnitPriceForQty(product, newQty);
+      const unitPrice = priceOnRequest ? 0 : this.getUnitPriceForQty(product, newQty);
       cart[existingIndex].quantity = newQty;
       cart[existingIndex].unitPrice = unitPrice;
       cart[existingIndex].total = parseFloat((newQty * unitPrice).toFixed(2));
+      cart[existingIndex].priceOnRequest = priceOnRequest;
       if (notes) cart[existingIndex].notes = notes;
     } else {
-      const unitPrice = this.getUnitPriceForQty(product, qty);
+      const unitPrice = priceOnRequest ? 0 : this.getUnitPriceForQty(product, qty);
       cart.push({
+        priceOnRequest,
         id: 'item-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
         productId: product.id,
         name: product.name,
@@ -309,12 +321,14 @@ class Database {
     const item = cart[idx];
     const product = this.getProductById(item.productId);
     const newQty = Math.max(1, parseInt(updates.quantity ?? item.quantity, 10) || 1);
-    const unitPrice = product ? this.getUnitPriceForQty(product, newQty) : item.unitPrice;
+    const priceOnRequest = product ? isPriceOnRequest(product) : !!item.priceOnRequest;
+    const unitPrice = priceOnRequest ? 0 : product ? this.getUnitPriceForQty(product, newQty) : item.unitPrice;
 
     cart[idx] = {
       ...item,
       ...updates,
       quantity: newQty,
+      priceOnRequest,
       unitPrice,
       total: parseFloat((newQty * unitPrice).toFixed(2)),
     };
@@ -362,6 +376,7 @@ class Database {
 
     return {
       itemCount: cart.length,
+      onRequestCount: cart.filter(item => item.priceOnRequest).length,
       totalUnits: totalItems,
       subtotal,
       discountPercent,

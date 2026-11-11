@@ -76,11 +76,12 @@ function syncStorefrontWithDB() {
 
 function updateCartCounters() {
   const cart = db.getCart();
-  const totalUnits = cart.reduce((sum, item) => sum + (parseInt(item.quantity, 10) || 0), 0);
+  // Número de itens no orçamento (não a soma das unidades)
+  const itemCount = cart.length;
   const cartBadges = document.querySelectorAll('#cart-count-badge, .cart-count-badge');
   cartBadges.forEach(badge => {
-    badge.textContent = totalUnits;
-    badge.style.display = totalUnits > 0 ? 'flex' : 'none';
+    badge.textContent = itemCount;
+    badge.style.display = itemCount > 0 ? 'flex' : 'none';
   });
 }
 
@@ -97,13 +98,6 @@ function setupEntryPopup() {
     if (entryPopup) {
       entryPopup.style.display = 'none';
       entryPopup.classList.add('hidden');
-    }
-  }
-
-  function openEntryPopup() {
-    if (entryPopup) {
-      entryPopup.style.display = 'flex';
-      entryPopup.classList.remove('hidden');
     }
   }
 
@@ -125,17 +119,6 @@ function setupEntryPopup() {
       }
     });
   }
-
-  // Bind PT / Language button to open Cashback offer
-  document.querySelectorAll('button').forEach(btn => {
-    if (btn.textContent.trim() === 'PT' || btn.querySelector('span[translate="no"]')?.textContent.trim() === 'PT') {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        openEntryPopup();
-      });
-    }
-  });
 }
 
 // ------------------------------------------------------------------
@@ -513,15 +496,18 @@ function openOrderModal(product) {
 
   let selectedQty = 100;
   let selectedColor = (product.colorNames && product.colorNames[0]) ? product.colorNames[0].name : 'Cor Padrão';
-  let unitPrice = db.getUnitPriceForQty(product, selectedQty);
+  // Produto sem preço: valor "sob consulta", combinado pelo WhatsApp
+  const onRequest = db.isPriceOnRequest(product);
+  let unitPrice = onRequest ? 0 : db.getUnitPriceForQty(product, selectedQty);
+  const unitPriceLabel = () => (onRequest ? 'Preço sob consulta' : `R$ ${unitPrice.toFixed(2).replace('.', ',')} / un.`);
+  const totalLabel = () => (onRequest ? 'Sob consulta' : `R$ ${(selectedQty * unitPrice).toFixed(2).replace('.', ',')}`);
 
   function recalculate() {
-    unitPrice = db.getUnitPriceForQty(product, selectedQty);
-    const total = selectedQty * unitPrice;
+    unitPrice = onRequest ? 0 : db.getUnitPriceForQty(product, selectedQty);
     const unitPriceEl = document.getElementById('modal-unit-price-display');
     const totalEl = document.getElementById('modal-order-total');
-    if (unitPriceEl) unitPriceEl.textContent = `R$ ${unitPrice.toFixed(2).replace('.', ',')} / un.`;
-    if (totalEl) totalEl.textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
+    if (unitPriceEl) unitPriceEl.textContent = unitPriceLabel();
+    if (totalEl) totalEl.textContent = totalLabel();
   }
 
   modalBackdrop.classList.remove('hidden');
@@ -547,9 +533,9 @@ function openOrderModal(product) {
               <span style="font-size: 11px; font-weight: 800; color: #22C55E; background: #DCFCE7; padding: 2px 6px; border-radius: 4px;">Em Estoque</span>
             </div>
             <div id="modal-unit-price-display" style="font-size: 16px; font-weight: 800; color: #06180E; margin-top: 2px;">
-              R$ ${unitPrice.toFixed(2).replace('.', ',')} / un.
+              ${unitPriceLabel()}
             </div>
-            <div style="font-size: 11px; color: #64748B;">Categoria: <strong>${product.category || 'Geral'}</strong> · Preço progressivo por atacado</div>
+            <div style="font-size: 11px; color: #64748B;">Categoria: <strong>${product.category || 'Geral'}</strong> · ${onRequest ? 'Valor informado pela nossa equipe no WhatsApp' : 'Preço progressivo por atacado'}</div>
           </div>
         </div>
 
@@ -615,18 +601,18 @@ function openOrderModal(product) {
         <!-- Total Calculation Box -->
         <div style="background: linear-gradient(135deg, #06180E 0%, #0A2717 100%); border: 1.5px solid #FAB818; border-radius: 12px; padding: 14px; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; color: #fff;">
           <div>
-            <div style="font-size: 11px; color: #FAB818; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">INVESTIMENTO TOTAL ESTIMADO</div>
-            <div style="font-size: 11px; color: #E2E8F0;">${db.getSettings().pixDiscountPercent}% de desconto à vista via Pix ou até ${db.getSettings().maxInstallments}x s/ juros</div>
+            <div style="font-size: 11px; color: #FAB818; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">${onRequest ? 'VALOR' : 'INVESTIMENTO TOTAL ESTIMADO'}</div>
+            <div style="font-size: 11px; color: #E2E8F0;">${onRequest ? 'Adicione ao orçamento e envie tudo pelo WhatsApp' : `${db.getSettings().pixDiscountPercent}% de desconto à vista via Pix ou até ${db.getSettings().maxInstallments}x s/ juros`}</div>
           </div>
           <div id="modal-order-total" style="font-size: 20px; font-weight: 900; color: #FAB818;">
-            R$ ${(selectedQty * unitPrice).toFixed(2).replace('.', ',')}
+            ${totalLabel()}
           </div>
         </div>
       </form>
 
       <div class="admin-modal-footer" style="padding: 16px 20px; background: #F8FAFC; border-top: 1px solid #E2E8F0; display: flex; gap: 10px; justify-content: space-between;">
         <button type="button" id="btn-add-to-cart-from-modal" class="admin-btn admin-btn-secondary" style="font-size: 13px;">
-          🛒 Adicionar à Sacola
+          📋 Adicionar ao Orçamento
         </button>
         <div style="display: flex; gap: 8px;">
           <button type="button" id="btn-submit-whatsapp-order" class="admin-btn" style="background: #25D366; color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px;">
@@ -692,12 +678,9 @@ function openOrderModal(product) {
   // Action: Add to Cart
   document.getElementById('btn-add-to-cart-from-modal')?.addEventListener('click', () => {
     const notes = document.getElementById('order-notes')?.value.trim() || '';
-    db.addToCart(product, selectedQty, {
-      selectedColor,
-      notes,
-    });
+    db.addToCart({ productId: product.id, quantity: selectedQty, color: selectedColor, notes });
     closeOrderModal();
-    showToast(`Adicionado: ${selectedQty}x ${product.name} à sacola!`, 'success');
+    showToast(`Adicionado: ${selectedQty}x ${product.name} ao orçamento!`, 'success');
     openCartDrawer();
   });
 
@@ -707,12 +690,15 @@ function openOrderModal(product) {
     const company = document.getElementById('order-cust-company')?.value.trim() || 'Não informada';
     const notes = document.getElementById('order-notes')?.value.trim() || 'Padrão';
     const total = (selectedQty * unitPrice).toFixed(2).replace('.', ',');
+    const valueLine = onRequest
+      ? '*Valor:* sob consulta'
+      : `*Valor Estimado:* R$ ${total} (R$ ${unitPrice.toFixed(2).replace('.', ',')}/un.)`;
 
     const message = `Olá, Gordinho Brindes! Vim pelo site e gostaria de um orçamento corporativo:
 *Produto:* ${product.name} (SKU: ${product.sku || 'N/A'})
 *Quantidade:* ${selectedQty} unidades
 *Cor Escolhida:* ${selectedColor}
-*Valor Estimado:* R$ ${total} (R$ ${unitPrice.toFixed(2).replace('.', ',')}/un.)
+${valueLine}
 *Cliente:* ${name}
 *Empresa:* ${company}
 *Instruções:* ${notes}`;
@@ -806,7 +792,7 @@ function setupCartDrawer() {
           <div class="flex items-center gap-2.5">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FAB818" stroke-width="2.2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
             <div>
-              <h2 class="font-bold text-base text-white font-heading">Sua Sacola de Orçamentos</h2>
+              <h2 class="font-bold text-base text-white font-heading">Meu Orçamento</h2>
               <p class="text-[11px] text-gray-300">Gordinho Brindes · Faturamento corporativo</p>
             </div>
           </div>
@@ -820,7 +806,7 @@ function setupCartDrawer() {
         </div>
 
         <!-- Coupon Input Box -->
-        <div class="px-5 py-3 bg-[#F8FAFC] border-t border-gray-200">
+        <div id="cart-coupon-box" class="px-5 py-3 bg-[#F8FAFC] border-t border-gray-200">
           <div class="flex gap-2">
             <input type="text" id="cart-coupon-input" placeholder="Cupom de Desconto (ex: GORDINHO5)" class="admin-input" style="padding: 7px 10px; font-size: 12px; flex: 1; text-transform: uppercase;">
             <button type="button" id="btn-apply-coupon" class="admin-btn admin-btn-secondary admin-btn-sm" style="font-size: 11px; font-weight: 700;">
@@ -832,7 +818,7 @@ function setupCartDrawer() {
 
         <!-- Footer / Checkout -->
         <div class="p-5 border-t border-gray-200 bg-white">
-          <div class="space-y-1.5 mb-3 text-xs">
+          <div id="cart-totals-box" class="space-y-1.5 mb-3 text-xs">
             <div class="flex justify-between text-gray-500">
               <span>Subtotal estimado</span>
               <span id="cart-subtotal-val" class="font-semibold text-gray-800">R$ 0,00</span>
@@ -854,11 +840,11 @@ function setupCartDrawer() {
           <div class="space-y-2">
             <button id="btn-cart-whatsapp-checkout" class="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.669-.699c.969.54 1.771.82 2.791.82 3.181 0 5.768-2.587 5.768-5.766.001-3.182-2.585-5.806-5.768-5.806zm7.251 5.766c-.001 4.004-3.257 7.258-7.251 7.258-1.22 0-2.385-.306-3.411-.854l-3.769.988 1.006-3.676c-.633-1.076-.98-2.327-.98-3.716 0-4.004 3.256-7.259 7.251-7.259 3.996 0 7.253 3.255 7.253 7.259z"/></svg>
-              <span>Enviar Proposta no WhatsApp</span>
+              <span>Enviar orçamento no WhatsApp</span>
             </button>
             <div class="flex gap-2">
               <button id="btn-clear-cart" class="flex-1 py-2 text-center text-xs text-gray-500 hover:text-red-500 transition-colors font-medium">
-                Limpar Sacola
+                Limpar Orçamento
               </button>
               <button id="btn-continue-shopping" class="flex-1 py-2 text-center text-xs text-[#06180E] hover:underline font-bold">
                 + Adicionar mais
@@ -875,7 +861,7 @@ function setupCartDrawer() {
     document.getElementById('btn-continue-shopping')?.addEventListener('click', closeCartDrawer);
 
     document.getElementById('btn-clear-cart')?.addEventListener('click', () => {
-      if (confirm('Deseja realmente limpar todos os itens da sacola?')) {
+      if (confirm('Deseja realmente limpar todos os itens do orçamento?')) {
         db.clearCart();
         renderCartDrawer();
       }
@@ -912,21 +898,30 @@ function setupCartDrawer() {
     document.getElementById('btn-cart-whatsapp-checkout')?.addEventListener('click', async () => {
       const cart = db.getCart();
       if (cart.length === 0) {
-        alert('Sua sacola está vazia.');
+        alert('Seu orçamento está vazio.');
         return;
       }
       const calc = db.getCartTotals(appliedCouponCode);
-      let itemsText = cart.map((item, idx) => 
-        `${idx + 1}. *${item.name}* (SKU: ${item.sku || 'N/A'})\n   - Qtd: ${item.quantity} un. | Cor: ${item.color || 'Padrão'}\n   - Valor: R$ ${item.total.toFixed(2).replace('.', ',')} (R$ ${item.unitPrice.toFixed(2).replace('.', ',')}/un.)`
-      ).join('\n\n');
+      let itemsText = cart.map((item, idx) => {
+        const value = item.priceOnRequest
+          ? 'sob consulta'
+          : `R$ ${item.total.toFixed(2).replace('.', ',')} (R$ ${item.unitPrice.toFixed(2).replace('.', ',')}/un.)`;
+        return `${idx + 1}. *${item.name}* (SKU: ${item.sku || 'N/A'})\n   - Qtd: ${item.quantity} un. | Cor: ${item.color || 'Padrão'}\n   - Valor: ${value}`;
+      }).join('\n\n');
 
-      const message = `Olá, equipe Gordinho Brindes! Gostaria de formalizar uma proposta comercial com os seguintes itens da minha sacola:
+      // Totais só fazem sentido se houver itens com preço; itens sob consulta são cotados pela equipe
+      const allOnRequest = calc.onRequestCount === cart.length;
+      const totalsText = allOnRequest
+        ? '*Valores:* sob consulta. Aguardo o orçamento!'
+        : `*Subtotal:* R$ ${calc.subtotal.toFixed(2).replace('.', ',')}
+${calc.discountAmount > 0 ? `*Desconto (${calc.discountPercent}%):* -R$ ${calc.discountAmount.toFixed(2).replace('.', ',')}\n` : ''}*Total Estimado:* R$ ${calc.total.toFixed(2).replace('.', ',')}${calc.onRequestCount ? ` + ${calc.onRequestCount} item(ns) sob consulta` : ''}
+*À vista no Pix:* R$ ${calc.pixTotal.toFixed(2).replace('.', ',')}`;
+
+      const message = `Olá, equipe Gordinho Brindes! ${allOnRequest ? 'Gostaria de um orçamento para os seguintes itens:' : 'Gostaria de formalizar uma proposta comercial com os seguintes itens:'}
 
 ${itemsText}
 
-*Subtotal:* R$ ${calc.subtotal.toFixed(2).replace('.', ',')}
-${calc.discountAmount > 0 ? `*Desconto (${calc.discountPercent}%):* -R$ ${calc.discountAmount.toFixed(2).replace('.', ',')}\n` : ''}*Total Estimado:* R$ ${calc.total.toFixed(2).replace('.', ',')}
-*À vista no Pix:* R$ ${calc.pixTotal.toFixed(2).replace('.', ',')}
+${totalsText}
 
 Aguardo retorno com o mockup digital e dados para faturamento!`;
 
@@ -942,7 +937,7 @@ Aguardo retorno com o mockup digital e dados para faturamento!`;
         items: cart.map(({ productId, quantity, color, notes }) => ({ productId, quantity, color, notes })),
         couponCode: appliedCouponCode,
         paymentMethod: `Pix à vista (${db.getSettings().pixDiscountPercent}% OFF) ou Boleto Faturado`,
-        notes: 'Pedido gerado via Sacola de Orçamentos do Storefront.',
+        notes: 'Pedido gerado pelo Meu Orçamento da loja.',
       });
       } catch (err) {
         // O orçamento segue pelo WhatsApp mesmo se o registro no banco falhar
@@ -960,7 +955,7 @@ Aguardo retorno com o mockup digital e dados para faturamento!`;
   }
 
   // Bind all cart toggle buttons across header and nav
-  document.querySelectorAll('a[href="/carrinho"], button[aria-label*="carrinho"], button[aria-label*="sacola"], #header-cart-btn, .cart-trigger').forEach(btn => {
+  document.querySelectorAll('a[href="/carrinho"], button[aria-label*="carrinho"], button[aria-label*="sacola"], button[aria-label*="Orçamento"], #header-cart-btn, .cart-trigger').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       openCartDrawer();
@@ -995,9 +990,19 @@ function renderCartDrawer(couponCode = '') {
   const discountVal = document.getElementById('cart-discount-val');
   const discountLabel = document.getElementById('cart-discount-label');
 
-  if (subtotalEl) subtotalEl.textContent = `R$ ${calc.subtotal.toFixed(2).replace('.', ',')}`;
-  if (totalEl) totalEl.textContent = `R$ ${calc.total.toFixed(2).replace('.', ',')}`;
-  if (pixEl) pixEl.textContent = `R$ ${calc.pixTotal.toFixed(2).replace('.', ',')}`;
+  // Itens sem preço não entram na soma; se forem todos, os totais ficam "sob consulta"
+  const allOnRequest = cart.length > 0 && calc.onRequestCount === cart.length;
+  const onRequestSuffix = calc.onRequestCount && !allOnRequest ? ` + ${calc.onRequestCount} sob consulta` : '';
+  if (subtotalEl) subtotalEl.textContent = allOnRequest ? 'Sob consulta' : `R$ ${calc.subtotal.toFixed(2).replace('.', ',')}${onRequestSuffix}`;
+  if (totalEl) totalEl.textContent = allOnRequest ? 'Sob consulta' : `R$ ${calc.total.toFixed(2).replace('.', ',')}${onRequestSuffix}`;
+  if (pixEl) pixEl.textContent = allOnRequest ? 'Sob consulta' : `R$ ${calc.pixTotal.toFixed(2).replace('.', ',')}`;
+
+  // Sem nenhum item com preço, cupom e totais não se aplicam: o valor vem pelo WhatsApp
+  const hidePricing = cart.length === 0 || allOnRequest;
+  const couponBox = document.getElementById('cart-coupon-box');
+  const totalsBox = document.getElementById('cart-totals-box');
+  if (couponBox) couponBox.hidden = hidePricing;
+  if (totalsBox) totalsBox.hidden = hidePricing;
 
   if (discountRow && discountVal) {
     if (calc.discountAmount > 0) {
@@ -1015,7 +1020,7 @@ function renderCartDrawer(couponCode = '') {
         <div class="w-16 h-16 rounded-full bg-amber-50 text-[#FAB818] flex items-center justify-center mx-auto mb-3">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
         </div>
-        <h3 class="text-sm font-bold text-gray-800 mb-1">Sua sacola de orçamentos está vazia</h3>
+        <h3 class="text-sm font-bold text-gray-800 mb-1">Seu orçamento está vazio</h3>
         <p class="text-xs text-gray-500 mb-5">Navegue pelas 50 opções de brindes corporativos e adicione para cotar.</p>
         <button type="button" class="admin-btn admin-btn-primary admin-btn-sm" onclick="document.getElementById('gordinho-cart-drawer').classList.add('hidden'); window.scrollTo({top: 800, behavior: 'smooth'});">
           Explorar Brindes
@@ -1036,7 +1041,7 @@ function renderCartDrawer(couponCode = '') {
               Cor: <strong class="text-gray-700">${item.color || 'Padrão'}</strong>
             </div>
             <div class="text-xs font-bold text-emerald-600 mt-1">
-              R$ ${item.unitPrice.toFixed(2).replace('.', ',')} / un.
+              ${item.priceOnRequest ? 'Preço sob consulta' : `R$ ${item.unitPrice.toFixed(2).replace('.', ',')} / un.`}
             </div>
 
             <!-- Stepper -->
@@ -1052,7 +1057,7 @@ function renderCartDrawer(couponCode = '') {
             </div>
           </div>
           <div class="font-extrabold text-sm text-[#06180E]">
-            R$ ${item.total.toFixed(2).replace('.', ',')}
+            ${item.priceOnRequest ? '' : `R$ ${item.total.toFixed(2).replace('.', ',')}`}
           </div>
         </div>
       `).join('')}
@@ -1181,7 +1186,7 @@ function setupInstitutionalLinks() {
         <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13px;">
           <div style="display: flex; gap: 10px;">
             <span style="width: 28px; height: 28px; border-radius: 50%; background: #FAB818; color: #06180E; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">1</span>
-            <div><strong>Escolha seus Brindes:</strong> Navegue pelo catálogo, selecione as quantidades e cores desejadas e monte sua sacola de orçamentos.</div>
+            <div><strong>Escolha seus Brindes:</strong> Navegue pelo catálogo, selecione as quantidades e cores desejadas e monte seu orçamento.</div>
           </div>
           <div style="display: flex; gap: 10px;">
             <span style="width: 28px; height: 28px; border-radius: 50%; background: #FAB818; color: #06180E; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">2</span>

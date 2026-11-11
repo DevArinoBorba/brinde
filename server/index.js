@@ -6,7 +6,7 @@ import express from 'express';
 import * as store from './database.js';
 import { ensureAdminCredential, login, changePin, requireAdmin } from './auth.js';
 import * as instagram from './instagram.js';
-import { unitPriceForQty } from '../src/pricing.js';
+import { unitPriceForQty, isPriceOnRequest } from '../src/pricing.js';
 
 const PORT = Number(process.env.PORT) || 3000;
 // LISTEN_HOST (e não HOST): o Coolify injeta HOST=0.0.0.0, e o health check dele usa localhost -> ::1 no Alpine
@@ -99,15 +99,19 @@ async function buildOrder(input, { admin }) {
     const quantity = Math.min(1_000_000, Math.max(1, parseInt(raw?.quantity, 10) || 1));
     if (!product && !admin) throw new HttpError(400, 'Produto não encontrado no catálogo.');
 
-    const unitPrice = admin && Number.isFinite(Number(raw?.unitPrice))
-      ? Math.max(0, Number(raw.unitPrice))
-      : unitPriceForQty(product, quantity);
+    // Produto sem preço no catálogo: entra no pedido como "sob consulta" (valor combinado no WhatsApp)
+    const priceOnRequest = product ? isPriceOnRequest(product) : false;
+    const adminPrice = admin && Number.isFinite(Number(raw?.unitPrice)) && Number(raw.unitPrice) > 0;
+    const unitPrice = adminPrice
+      ? Number(raw.unitPrice)
+      : priceOnRequest ? 0 : unitPriceForQty(product, quantity);
     return {
       productId: product ? product.id : 'manual',
       name: product ? product.name : text(raw?.name, 160) || 'Item Personalizado',
       sku: product ? product.sku || '' : '',
       quantity,
       color: text(raw?.color, 60),
+      priceOnRequest: priceOnRequest && !adminPrice,
       unitPrice: round2(unitPrice),
       total: round2(quantity * unitPrice),
     };
@@ -134,6 +138,7 @@ async function buildOrder(input, { admin }) {
     discountPercent,
     couponCode: discountPercent ? couponCode : '',
     total,
+    hasPriceOnRequest: items.some((it) => it.priceOnRequest),
     paymentMethod: text(input.paymentMethod, 120),
     notes: text(input.notes, 1000),
     source: admin ? 'painel' : 'loja',
