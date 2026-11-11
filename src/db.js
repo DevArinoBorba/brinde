@@ -583,6 +583,39 @@ class Database {
     }
   }
 
+  /** Envia um arquivo (vídeo/capa dos reels) para o banco. Retorna { id, url }. */
+  async uploadMedia(file) {
+    const res = await fetch(`${API_BASE}/admin/media`, {
+      method: 'POST',
+      headers: { 'Content-Type': file.type, Authorization: `Bearer ${this.getAuthSession().token}` },
+      body: file,
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      if (res.status === 401) this.logout();
+      throw new ApiError(data?.error || `Erro ${res.status} ao enviar o arquivo.`, res.status);
+    }
+    return data;
+  }
+
+  // --- INSTAGRAM (API oficial, token guardado só no servidor) ---
+  instagramStatus() {
+    return this._api('/admin/instagram', { auth: true });
+  }
+
+  connectInstagram(token) {
+    return this._api('/admin/instagram', { method: 'PUT', body: { token }, auth: true });
+  }
+
+  disconnectInstagram() {
+    return this._api('/admin/instagram', { method: 'DELETE', auth: true });
+  }
+
+  /** Importa um reel da conta conectada pelo link. Retorna { videoId, posterId, title, permalink }. */
+  importInstagramReel(url) {
+    return this._api('/admin/instagram/import', { method: 'POST', body: { url }, auth: true });
+  }
+
   async changePin(newPin) {
     const session = await this._api('/admin/pin', { method: 'PUT', body: { pin: newPin }, auth: true });
     this._setItem(STORAGE_KEYS.AUTH, session);

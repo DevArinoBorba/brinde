@@ -725,7 +725,8 @@ function renderCategoriesView(container) {
 // ----------------------------------------------------
 function renderSettingsView(container) {
   const settings = db.getSettings();
-  const reelsText = (settings.instagramReels || []).join('\n');
+  // Rascunho da lista de reels: só vai para o banco ao clicar em "Salvar Alterações"
+  const reelsDraft = (settings.reels || []).map((r) => ({ ...r }));
 
   const sectionTitle = (title, help) => `
     <div style="grid-column: 1 / -1; margin: 22px 0 4px; padding-top: 18px; border-top: 1px solid #E2E8F0;">
@@ -775,9 +776,26 @@ function renderSettingsView(container) {
           ${field('setting-youtube', 'YouTube (link)', settings.youtubeUrl, { type: 'url' })}
           ${field('setting-tiktok', 'TikTok (link)', settings.tiktokUrl, { type: 'url' })}
 
-          ${sectionTitle('Reels do Instagram', 'Um link de reel por linha (ex.: https://www.instagram.com/reel/ABC123/). Aparecem na seção de Instagram da loja, na ordem informada.')}
+          ${sectionTitle('Reels da loja (vídeos)', 'Na loja aparece só o vídeo, sem o layout do Instagram. Importe pelo link do reel ou envie o arquivo MP4 (até 80 MB). Sem vídeos, a seção fica oculta.')}
           <div class="admin-form-group" style="grid-column: 1 / -1;">
-            <textarea id="setting-reels" class="admin-textarea" rows="6" placeholder="https://www.instagram.com/reel/...">${escapeHtml(reelsText)}</textarea>
+            <div class="reels-instagram-box">
+              <div id="ig-connection-status" class="admin-form-help">Verificando conexão com o Instagram...</div>
+              <div id="ig-connect-form" class="reels-inline-form" hidden>
+                <input type="password" id="ig-token-input" class="admin-input" placeholder="Cole aqui o token de acesso da API do Instagram" autocomplete="off">
+                <button type="button" id="btn-ig-connect" class="admin-btn admin-btn-forest admin-btn-sm">Conectar</button>
+              </div>
+              <div id="ig-import-form" class="reels-inline-form" hidden>
+                <input type="url" id="ig-reel-url" class="admin-input" placeholder="Cole o link do reel (https://www.instagram.com/reel/...)">
+                <button type="button" id="btn-ig-import" class="admin-btn admin-btn-primary admin-btn-sm">Importar vídeo</button>
+                <button type="button" id="btn-ig-disconnect" class="admin-btn admin-btn-secondary admin-btn-sm">Desconectar</button>
+              </div>
+            </div>
+            <div id="reels-admin-list" class="reels-admin-list"></div>
+            <label class="admin-btn admin-btn-secondary" style="margin-top: 10px; cursor: pointer;">
+              <input type="file" id="reel-upload-input" accept="video/mp4,video/webm" multiple hidden>
+              + Enviar arquivo de vídeo
+            </label>
+            <div id="reel-upload-status" class="admin-form-help"></div>
           </div>
 
           ${sectionTitle('Promoções e pagamento')}
@@ -809,6 +827,8 @@ function renderSettingsView(container) {
   const form = container.querySelector('#settings-form');
   if (!form) return;
 
+  setupReelsEditor(container, reelsDraft);
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const val = (id) => container.querySelector(`#${id}`).value.trim();
@@ -823,11 +843,6 @@ function renderSettingsView(container) {
       return;
     }
 
-    const reels = val('setting-reels')
-      .split(/\s+/)
-      .map(normalizeReelUrl)
-      .filter(Boolean);
-
     db.saveSettings({
       storeName: val('setting-store-name') || 'Gordinho Brindes',
       storeSubtitle: val('setting-store-subtitle'),
@@ -841,7 +856,7 @@ function renderSettingsView(container) {
       businessHours: val('setting-hours'),
       instagramHandle: instagram.handle,
       instagramUrl: instagram.url,
-      instagramReels: reels,
+      reels: reelsDraft.map(({ id, videoId, posterId, title }) => ({ id, videoId, posterId, title })),
       facebookUrl: val('setting-facebook'),
       youtubeUrl: val('setting-youtube'),
       tiktokUrl: val('setting-tiktok'),
@@ -877,12 +892,166 @@ function normalizeInstagram(input) {
   return { handle: `@${user}`, url: `https://www.instagram.com/${user}/` };
 }
 
-// Aceita links de reel/post (com ou sem parâmetros) e devolve a URL canônica
-function normalizeReelUrl(input) {
-  const match = String(input || '').match(/instagram\.com\/(?:[A-Za-z0-9._]+\/)?(reels?|p|tv)\/([A-Za-z0-9_-]+)/);
-  if (!match) return null;
-  const kind = match[1] === 'p' || match[1] === 'tv' ? match[1] : 'reel';
-  return `https://www.instagram.com/${kind}/${match[2]}/`;
+// ----------------------------------------------------
+// Reels: lista editável (ordem, título, remover) e upload dos vídeos
+// ----------------------------------------------------
+function setupReelsEditor(container, reelsDraft) {
+  const list = container.querySelector('#reels-admin-list');
+  const input = container.querySelector('#reel-upload-input');
+  const status = container.querySelector('#reel-upload-status');
+  if (!list || !input) return;
+
+  const render = () => {
+    list.innerHTML = reelsDraft.length ? reelsDraft.map((reel, i) => `
+      <div class="reels-admin-item" data-index="${i}">
+        <video src="/media/${escapeHtml(reel.videoId)}" ${reel.posterId ? `poster="/media/${escapeHtml(reel.posterId)}"` : ''} muted playsinline preload="metadata"></video>
+        <input type="text" class="admin-input reel-title-input" placeholder="Título sobre o vídeo (opcional)" maxlength="120" value="${escapeHtml(reel.title || '')}">
+        <div class="reels-admin-actions">
+          <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" data-action="up" ${i === 0 ? 'disabled' : ''} aria-label="Mover para cima">↑</button>
+          <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" data-action="down" ${i === reelsDraft.length - 1 ? 'disabled' : ''} aria-label="Mover para baixo">↓</button>
+          <button type="button" class="admin-btn admin-btn-danger admin-btn-sm" data-action="remove">Remover</button>
+        </div>
+      </div>`).join('') : '<div class="admin-form-help">Nenhum vídeo cadastrado: a seção de reels não aparece na loja.</div>';
+  };
+
+  list.addEventListener('input', (e) => {
+    const item = e.target.closest('.reels-admin-item');
+    if (item && e.target.classList.contains('reel-title-input')) reelsDraft[item.dataset.index].title = e.target.value;
+  });
+
+  list.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const i = Number(btn.closest('.reels-admin-item').dataset.index);
+    if (btn.dataset.action === 'remove') reelsDraft.splice(i, 1);
+    if (btn.dataset.action === 'up' && i > 0) [reelsDraft[i - 1], reelsDraft[i]] = [reelsDraft[i], reelsDraft[i - 1]];
+    if (btn.dataset.action === 'down' && i < reelsDraft.length - 1) [reelsDraft[i + 1], reelsDraft[i]] = [reelsDraft[i], reelsDraft[i + 1]];
+    render();
+  });
+
+  input.addEventListener('change', async () => {
+    const files = [...input.files];
+    input.value = '';
+    for (const [n, file] of files.entries()) {
+      if (!['video/mp4', 'video/webm'].includes(file.type)) {
+        showToast(`"${file.name}" não é MP4/WebM.`, 'error');
+        continue;
+      }
+      if (file.size > 80 * 1024 * 1024) {
+        showToast(`"${file.name}" passa de 80 MB.`, 'error');
+        continue;
+      }
+      status.textContent = `Enviando ${n + 1} de ${files.length}: ${file.name}...`;
+      try {
+        const poster = await captureVideoPoster(file);
+        const video = await db.uploadMedia(file);
+        const posterMedia = poster ? await db.uploadMedia(poster) : null;
+        reelsDraft.push({ id: crypto.randomUUID(), videoId: video.id, posterId: posterMedia?.id || '', title: '' });
+        render();
+      } catch (err) {
+        showToast(`Falha ao enviar "${file.name}": ${err.message}`, 'error');
+      }
+    }
+    status.textContent = files.length ? 'Envio concluído. Clique em "Salvar Alterações" para publicar na loja.' : '';
+  });
+
+  setupInstagramImport(container, (reel) => {
+    reelsDraft.push(reel);
+    render();
+  });
+
+  render();
+}
+
+// Conexão com a API oficial do Instagram + importação de reel pelo link
+function setupInstagramImport(container, onImported) {
+  const statusEl = container.querySelector('#ig-connection-status');
+  const connectForm = container.querySelector('#ig-connect-form');
+  const importForm = container.querySelector('#ig-import-form');
+  if (!statusEl) return;
+
+  const showState = (state) => {
+    connectForm.hidden = state.connected;
+    importForm.hidden = !state.connected;
+    statusEl.textContent = state.connected
+      ? `Instagram conectado: @${state.username}. Cole o link de um reel desta conta para importar o vídeo.`
+      : `Instagram não conectado.${state.error ? ` (${state.error})` : ''} Para importar pelo link, cole o token de acesso da API do Instagram da conta.`;
+  };
+
+  db.instagramStatus().then(showState).catch((err) => {
+    statusEl.textContent = `Não foi possível verificar o Instagram: ${err.message}`;
+  });
+
+  container.querySelector('#btn-ig-connect')?.addEventListener('click', async (e) => {
+    const input = container.querySelector('#ig-token-input');
+    e.currentTarget.disabled = true;
+    try {
+      showState(await db.connectInstagram(input.value.trim()));
+      input.value = '';
+      showToast('Instagram conectado.', 'success');
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      e.currentTarget.disabled = false;
+    }
+  });
+
+  container.querySelector('#btn-ig-disconnect')?.addEventListener('click', async () => {
+    if (!confirm('Desconectar a conta do Instagram? Os vídeos já importados continuam na loja.')) return;
+    showState(await db.disconnectInstagram());
+  });
+
+  container.querySelector('#btn-ig-import')?.addEventListener('click', async (e) => {
+    const input = container.querySelector('#ig-reel-url');
+    const url = input.value.trim();
+    if (!url) return;
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Importando...';
+    try {
+      const reel = await db.importInstagramReel(url);
+      onImported({ id: crypto.randomUUID(), videoId: reel.videoId, posterId: reel.posterId, title: reel.title || '' });
+      input.value = '';
+      showToast('Vídeo importado. Clique em "Salvar Alterações" para publicar na loja.', 'success');
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Importar vídeo';
+    }
+  });
+}
+
+// Gera uma capa JPEG a partir de um quadro do vídeo (o card não fica preto antes do play)
+function captureVideoPoster(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    let finished = false;
+    const done = (blob) => {
+      if (finished) return;
+      finished = true;
+      URL.revokeObjectURL(url);
+      resolve(blob);
+    };
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.addEventListener('loadeddata', () => {
+      video.currentTime = Math.min(1, (video.duration || 2) / 2);
+    }, { once: true });
+    video.addEventListener('seeked', () => {
+      const width = Math.min(720, video.videoWidth || 720);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = Math.round(width * ((video.videoHeight || 16) / (video.videoWidth || 9)));
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(done, 'image/jpeg', 0.82);
+    }, { once: true });
+    video.addEventListener('error', () => done(null), { once: true });
+    setTimeout(() => done(null), 15000);
+    video.src = url;
+  });
 }
 
 // ----------------------------------------------------

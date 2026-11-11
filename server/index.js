@@ -1,9 +1,11 @@
 // Gordinho Brindes — servidor HTTP: API do painel/loja + arquivos estáticos do build Vite
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import * as store from './database.js';
 import { ensureAdminCredential, login, changePin, requireAdmin } from './auth.js';
+import * as instagram from './instagram.js';
 import { unitPriceForQty } from '../src/pricing.js';
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -14,6 +16,11 @@ const DIST_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const db = await store.openDatabase();
 await ensureAdminCredential(db);
 console.log(`[db] conectado: ${db.kind}`);
+
+// Vídeos/capas de reels enviados e nunca salvos nas configurações
+const reelMediaIds = (settings) => (settings.reels || []).flatMap((r) => [r.videoId, r.posterId]).filter(Boolean);
+const removedMedia = await store.deleteUnusedMedia(db, reelMediaIds(await store.getSettings(db)));
+if (removedMedia) console.log(`[media] ${removedMedia} arquivo(s) sem uso removido(s)`);
 
 const app = express();
 app.set('trust proxy', 1); // atrás do proxy do Coolify (Traefik)
@@ -244,8 +251,83 @@ admin.delete('/categories/:id', asyncRoute(async (req, res) => {
 admin.put('/settings', asyncRoute(async (req, res) => {
   if (!isPlainObject(req.body)) throw new HttpError(400, 'Configurações inválidas.');
   const { adminPin, ...patch } = req.body; // o PIN tem rota própria e nunca fica nas configurações públicas
-  res.json(await store.saveSettings(db, patch));
+  if (patch.reels !== undefined) patch.reels = sanitizeReels(patch.reels);
+
+  const before = await store.getSettings(db);
+  const saved = await store.saveSettings(db, patch);
+  if (patch.reels !== undefined) {
+    // Apaga do banco os vídeos/capas que saíram da lista
+    const keep = reelMediaIds(saved);
+    const dropped = reelMediaIds(before).filter((id) => !keep.includes(id));
+    await store.deleteUnusedMedia(db, keep, { alsoDelete: dropped });
+  }
+  res.json(saved);
 }));
+
+const MEDIA_ID_RE = /^med_[A-Za-z0-9_-]{16,40}$/;
+function sanitizeReels(value) {
+  if (!Array.isArray(value)) throw new HttpError(400, 'Lista de reels inválida.');
+  return value.slice(0, 30).map((r) => {
+    if (!isPlainObject(r) || !MEDIA_ID_RE.test(r.videoId || '')) throw new HttpError(400, 'Reel sem vídeo válido.');
+    return {
+      id: ID_RE.test(r.id || '') ? r.id : crypto.randomUUID(),
+      videoId: r.videoId,
+      posterId: MEDIA_ID_RE.test(r.posterId || '') ? r.posterId : '',
+      title: text(r.title, 120),
+    };
+  });
+}
+
+// Upload de vídeo (MP4/WebM) ou capa (JPEG/PNG/WebP) dos reels. Corpo = arquivo bruto.
+const MEDIA_TYPES = {
+  'video/mp4': 80 * 1024 * 1024,
+  'video/webm': 80 * 1024 * 1024,
+  'image/jpeg': 5 * 1024 * 1024,
+  'image/png': 5 * 1024 * 1024,
+  'image/webp': 5 * 1024 * 1024,
+};
+admin.post('/media',
+  express.raw({ type: Object.keys(MEDIA_TYPES), limit: '80mb' }),
+  asyncRoute(async (req, res) => {
+    const mime = (req.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    const maxSize = MEDIA_TYPES[mime];
+    if (!maxSize) throw new HttpError(415, 'Formato não suportado. Envie o vídeo em MP4 (ou WebM).');
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw new HttpError(400, 'Arquivo vazio.');
+    if (req.body.length > maxSize) throw new HttpError(413, 'Arquivo grande demais.');
+    const id = newMediaId();
+    await store.insertMedia(db, { id, mime, data: req.body });
+    res.status(201).json({ id, url: '/media/' + id, mime, size: req.body.length });
+  }));
+
+const newMediaId = () => 'med_' + crypto.randomBytes(16).toString('base64url');
+
+// Instagram (API oficial): conectar a conta e importar reel pelo link
+const instagramRoute = (fn) => asyncRoute(async (req, res) => {
+  try {
+    await fn(req, res);
+  } catch (err) {
+    if (err instanceof instagram.InstagramError) throw new HttpError(err.status, err.message);
+    throw err;
+  }
+});
+
+admin.get('/instagram', instagramRoute(async (req, res) => res.json(await instagram.status(db))));
+admin.put('/instagram', instagramRoute(async (req, res) => res.json(await instagram.connect(db, req.body?.token))));
+admin.delete('/instagram', instagramRoute(async (req, res) => res.json(await instagram.disconnect(db))));
+
+admin.post('/instagram/import',
+  rateLimit({ windowMs: 60 * 1000, max: 10, message: 'Muitas importações seguidas. Aguarde um minuto.' }),
+  instagramRoute(async (req, res) => {
+    const reel = await instagram.importReel(db, text(req.body?.url, 300));
+    const videoId = newMediaId();
+    await store.insertMedia(db, { id: videoId, mime: reel.video.mime, data: reel.video.data });
+    let posterId = '';
+    if (reel.poster) {
+      posterId = newMediaId();
+      await store.insertMedia(db, { id: posterId, mime: reel.poster.mime, data: reel.poster.data });
+    }
+    res.status(201).json({ videoId, posterId, title: reel.title, permalink: reel.permalink });
+  }));
 
 admin.put('/pin', asyncRoute(async (req, res) => {
   const pin = text(req.body?.pin, 64);
@@ -256,6 +338,43 @@ admin.put('/pin', asyncRoute(async (req, res) => {
 api.use('/admin', admin);
 api.use((req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
 app.use('/api', api);
+
+// ------------------------------------------------------------------
+// Mídia dos reels (com suporte a Range: o Safari/iOS exige para tocar vídeo)
+// ------------------------------------------------------------------
+app.get('/media/:id', asyncRoute(async (req, res) => {
+  if (!MEDIA_ID_RE.test(req.params.id)) return res.status(404).end();
+  const info = await store.getMediaInfo(db, req.params.id);
+  if (!info) return res.status(404).end();
+
+  res.set({
+    'Content-Type': info.mime,
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'public, max-age=31536000, immutable', // id muda a cada upload
+  });
+
+  let start = 0;
+  let end = info.size - 1;
+  const range = /^bytes=(\d*)-(\d*)$/.exec(req.get('range') || '');
+  if (range) {
+    if (range[1] === '') {
+      start = Math.max(0, info.size - Number(range[2]));
+    } else {
+      start = Number(range[1]);
+      if (range[2] !== '') end = Math.min(Number(range[2]), info.size - 1);
+    }
+    if (start > end || start >= info.size) {
+      return res.status(416).set('Content-Range', `bytes */${info.size}`).end();
+    }
+    // Blocos de até 2 MB por resposta para não segurar o vídeo inteiro na memória
+    end = Math.min(end, start + 2 * 1024 * 1024 - 1);
+    res.status(206).set('Content-Range', `bytes ${start}-${end}/${info.size}`);
+  }
+
+  res.set('Content-Length', String(end - start + 1));
+  if (req.method === 'HEAD') return res.end();
+  res.end(await store.getMediaChunk(db, req.params.id, start, end));
+}));
 
 // ------------------------------------------------------------------
 // Arquivos estáticos (mesmas regras do vercel.json: /admin -> painel, demais -> loja)
@@ -285,3 +404,7 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, HOST, () => console.log(`[server] Gordinho Brindes em http://${HOST}:${PORT}`));
+
+// Mantém o token do Instagram válido (expira em 60 dias sem renovação)
+instagram.refreshTokenIfNeeded(db);
+setInterval(() => instagram.refreshTokenIfNeeded(db), 24 * 60 * 60 * 1000).unref();

@@ -28,6 +28,18 @@ const SCHEMA = `
     data       JSONB NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
+  CREATE TABLE IF NOT EXISTS media (
+    id         TEXT PRIMARY KEY,
+    mime       TEXT NOT NULL,
+    size       INTEGER NOT NULL,
+    data       BYTEA NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE TABLE IF NOT EXISTS secrets (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
   CREATE TABLE IF NOT EXISTS admin_credentials (
     id         INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     pin_hash   TEXT NOT NULL,
@@ -227,6 +239,58 @@ export async function findOrdersForTracking(db, query) {
     [q, digits.length >= 10 ? digits : ''],
   );
   return rows.map((r) => r.data);
+}
+
+// ------------------------------------------------------------------
+// Mídia (vídeos e capas dos reels), guardada no próprio banco para entrar nos backups
+// ------------------------------------------------------------------
+export async function insertMedia(db, { id, mime, data }) {
+  await db.query('INSERT INTO media (id, mime, size, data) VALUES ($1, $2, $3, $4)', [id, mime, data.length, data]);
+  return { id, mime, size: data.length };
+}
+
+export async function getMediaInfo(db, id) {
+  const { rows } = await db.query('SELECT mime, size FROM media WHERE id = $1', [id]);
+  return rows[0] || null;
+}
+
+// Trecho do arquivo (start/end inclusivos) para respostas com Range
+export async function getMediaChunk(db, id, start, end) {
+  const { rows } = await db.query(
+    'SELECT substring(data FROM $2::int FOR $3::int) AS chunk FROM media WHERE id = $1',
+    [id, start + 1, end - start + 1],
+  );
+  const chunk = rows[0]?.chunk;
+  return chunk ? Buffer.from(chunk) : null;
+}
+
+// Remove arquivos que nenhum reel usa (uploads descartados com mais de 1 dia ou removidos agora)
+export async function deleteUnusedMedia(db, keepIds, { olderThanHours = 24, alsoDelete = [] } = {}) {
+  const { rowCount } = await db.query(
+    `DELETE FROM media
+     WHERE NOT (id = ANY($1))
+       AND (id = ANY($2) OR created_at < now() - make_interval(hours => $3::int))`,
+    [keepIds, alsoDelete, olderThanHours],
+  );
+  return rowCount;
+}
+
+// Segredos do servidor (nunca expostos pela API pública)
+export async function getSecret(db, key) {
+  const { rows } = await db.query('SELECT value, updated_at FROM secrets WHERE key = $1', [key]);
+  return rows[0] || null;
+}
+
+export async function setSecret(db, key, value) {
+  await db.query(
+    `INSERT INTO secrets (key, value, updated_at) VALUES ($1, $2, now())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [key, value],
+  );
+}
+
+export async function deleteSecret(db, key) {
+  await db.query('DELETE FROM secrets WHERE key = $1', [key]);
 }
 
 export async function getPinHash(db) {

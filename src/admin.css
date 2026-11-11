@@ -678,3 +678,57 @@ body.admin-body {
     display: inline-flex !important;
   }
 }
+
+/* Gerenciador de reels (Configurações) */
+.reels-admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.reels-admin-item {
+  display: grid;
+  grid-template-columns: 54px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  background: #F8FAFC;
+}
+.reels-admin-item video {
+  width: 54px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #0A2717;
+}
+.reels-admin-actions {
+  display: flex;
+  gap: 6px;
+}
+@media (max-width: 640px) {
+  .reels-admin-item {
+    grid-template-columns: 54px 1fr;
+  }
+  .reels-admin-actions {
+    grid-column: 1 / -1;
+  }
+}
+.reels-instagram-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px dashed #CBD5E1;
+  border-radius: 12px;
+  background: #FFFFFF;
+}
+.reels-inline-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.reels-inline-form .admin-input {
+  flex: 1 1 280px;
+}

@@ -19,14 +19,8 @@ export const DEFAULT_SETTINGS = {
   businessHours: 'Seg a Sex · 09h às 18h · Sáb 09h às 13h',
   instagramHandle: '@gordinhobrindesoficial',
   instagramUrl: 'https://www.instagram.com/gordinhobrindesoficial/',
-  instagramReels: [
-    'https://www.instagram.com/reel/Dfm6XoPOy3s/',
-    'https://www.instagram.com/reel/Dfm2qAQuDdE/',
-    'https://www.instagram.com/reel/DfbRTlMOXrS/',
-    'https://www.instagram.com/reel/DfKlDYHuF66/',
-    'https://www.instagram.com/reel/DfKYTe2uEDR/',
-    'https://www.instagram.com/reel/DfKYIPKunBe/',
-  ],
+  // Vídeos da seção de Instagram da loja: [{ id, videoId, posterId, title }] (arquivos em /media)
+  reels: [],
   facebookUrl: 'https://www.facebook.com/gordinhocelularoficial',
   youtubeUrl: 'https://www.youtube.com/@grupogordinho',
   tiktokUrl: 'https://www.tiktok.com/@ogordinhocelular',

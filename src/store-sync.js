@@ -274,66 +274,70 @@ function renderTiers(container, product) {
 }
 
 // ------------------------------------------------------------------
-// 3. REELS DO INSTAGRAM (embed oficial)
+// 3. REELS (vídeos enviados pelo painel, no visual original da seção)
 // ------------------------------------------------------------------
 let renderedReelsKey = '';
+
+const PLAY_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play w-6 h-6 text-[#0A2717] fill-[#0A2717] translate-x-0.5"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>';
 
 export function renderInstagramReels(settings = db.getSettings()) {
   const track = document.getElementById('instagram-reels-track');
   if (!track) return;
 
-  const reels = Array.isArray(settings.instagramReels) ? settings.instagramReels : [];
-  const key = JSON.stringify([reels, settings.instagramUrl]);
-  if (key === renderedReelsKey) return; // evita recarregar os iframes à toa
+  const reels = (Array.isArray(settings.reels) ? settings.reels : []).filter((r) => r && r.videoId);
+  const key = JSON.stringify(reels);
+  if (key === renderedReelsKey) return; // não reinicia vídeos que estão tocando
   renderedReelsKey = key;
 
-  if (reels.length) {
-    track.replaceChildren(...reels.map((url) => {
-      const card = document.createElement('div');
-      card.className = 'ig-reel-card';
-      const quote = document.createElement('blockquote');
-      quote.className = 'instagram-media';
-      quote.setAttribute('data-instgrm-permalink', url);
-      quote.setAttribute('data-instgrm-version', '14');
-      const fallback = document.createElement('a');
-      fallback.href = url;
-      fallback.target = '_blank';
-      fallback.rel = 'noopener noreferrer';
-      fallback.textContent = 'Ver este reel no Instagram';
-      quote.appendChild(fallback);
-      card.appendChild(quote);
-      return card;
-    }));
-    loadInstagramEmbedScript();
-  } else {
-    // Sem reels cadastrados: mostra a grade pública do perfil
-    const user = (settings.instagramUrl || '').match(/instagram\.com\/([A-Za-z0-9._]+)/)?.[1];
-    if (!user) {
-      track.replaceChildren();
-      return;
-    }
-    const card = document.createElement('div');
-    card.className = 'ig-profile-card';
-    const frame = document.createElement('iframe');
-    frame.src = `https://www.instagram.com/${user}/embed/`;
-    frame.title = `Instagram @${user}`;
-    frame.loading = 'lazy';
-    card.appendChild(frame);
-    track.replaceChildren(card);
-  }
+  // Sem vídeos cadastrados, a seção inteira some (nada de layout vazio)
+  const section = track.closest('section');
+  if (section) section.hidden = reels.length === 0;
+
+  track.replaceChildren(...reels.map(buildReelCard));
 }
 
-function loadInstagramEmbedScript() {
-  if (window.instgrm?.Embeds) {
-    window.instgrm.Embeds.process();
-    return;
-  }
-  if (document.getElementById('instagram-embed-js')) return;
-  const script = document.createElement('script');
-  script.id = 'instagram-embed-js';
-  script.async = true;
-  script.src = 'https://www.instagram.com/embed.js';
-  document.body.appendChild(script);
+function buildReelCard(reel) {
+  const card = document.createElement('div');
+  card.className = 'flex-none w-[78vw] max-w-[300px] sm:w-72 md:w-80 aspect-[9/16] snap-start group cursor-pointer';
+  card.innerHTML = `
+    <div class="relative h-full w-full rounded-[2.5rem] overflow-hidden bg-stone-900 transition-all duration-700 group-hover:scale-[1.02] shadow-2xl border-2 border-transparent group-hover:border-primary/30">
+      <video loop playsinline preload="metadata" class="absolute inset-0 w-full h-full object-cover"></video>
+      <div class="reel-shade absolute inset-0 bg-gradient-to-t from-[#0A2717] via-[#0A2717]/20 to-transparent opacity-80 group-hover:opacity-60 transition-opacity"></div>
+      <button type="button" aria-label="Reproduzir vídeo" class="absolute inset-0 flex items-center justify-center focus:outline-none">
+        <span class="reel-play w-14 h-14 bg-[#FAB818] rounded-full flex items-center justify-center shadow-xl transition-all duration-300 opacity-100 scale-100">${PLAY_ICON}</span>
+      </button>
+      <div class="reel-caption absolute bottom-8 left-8 right-8 pointer-events-none">
+        <h3 class="text-white font-bold leading-tight text-lg mb-3 tracking-tight"></h3>
+      </div>
+    </div>`;
+
+  const video = card.querySelector('video');
+  video.src = `/media/${reel.videoId}`;
+  if (reel.posterId) video.poster = `/media/${reel.posterId}`;
+  card.querySelector('h3').textContent = reel.title || '';
+
+  const button = card.querySelector('button');
+  const setPlaying = (playing) => {
+    card.classList.toggle('reel-playing', playing);
+    button.setAttribute('aria-label', playing ? 'Pausar vídeo' : 'Reproduzir vídeo');
+  };
+  button.addEventListener('click', () => {
+    if (video.paused) {
+      // Um vídeo por vez
+      document.querySelectorAll('#instagram-reels-track video').forEach((v) => v !== video && v.pause());
+      video.muted = false;
+      video.play().catch(() => {
+        // Navegador bloqueou som: toca mudo
+        video.muted = true;
+        video.play().catch(() => {});
+      });
+    } else {
+      video.pause();
+    }
+  });
+  video.addEventListener('play', () => setPlaying(true));
+  video.addEventListener('pause', () => setPlaying(false));
+  return card;
 }
 
 // Setas "anterior/próximo" da seção de reels
