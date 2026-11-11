@@ -453,8 +453,36 @@
 
 html, body {
   overflow-x: hidden !important;
+  /* clip corta a rolagem horizontal sem virar contêiner de rolagem (hidden anula position: sticky) */
+  overflow-x: clip !important;
   max-width: 100% !important;
   width: 100% !important;
+}
+
+/* Barra de categorias (PRODUTOS, ESCRITÓRIO, GARRAFAS...) presa no topo ao rolar.
+   O header com logo e busca rola normalmente; só a barra fica fixa. */
+header.sticky {
+  position: relative;
+}
+#category-nav {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  transition: box-shadow 200ms ease;
+}
+#category-nav.is-stuck {
+  box-shadow: 0 8px 24px -12px rgba(10, 39, 23, 0.35);
+}
+#category-nav.is-stuck > .container > div {
+  padding-top: 0.6rem;
+  padding-bottom: 0.6rem;
+  transition: padding 200ms ease;
+}
+/* Megamenu de Produtos abre logo abaixo da barra, onde quer que ela esteja */
+.nav-megamenu {
+  top: var(--megamenu-top, 140px) !important;
+  z-index: 61 !important;
+  max-height: calc(100vh - var(--megamenu-top, 140px) - 20px) !important;
 }
 
 

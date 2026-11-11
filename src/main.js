@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 2. Navigation & Modals UI
   setupEntryPopup();
+  setupStickyCategoryNav();
   setupMegaMenu();
   setupMobileDrawer();
   setupMobileSearch();
@@ -140,6 +141,32 @@ function setupEntryPopup() {
 // ------------------------------------------------------------------
 // 3. MEGAMENU & MOBILE DRAWER NAVIGATION
 // ------------------------------------------------------------------
+
+// Barra de categorias presa no topo (position: sticky no CSS). Aqui só marca quando
+// ela está colada no topo (sombra) e posiciona o megamenu logo abaixo dela.
+function setupStickyCategoryNav() {
+  const nav = document.getElementById('category-nav');
+  if (!nav) return;
+
+  let ticking = false;
+  const update = () => {
+    ticking = false;
+    const rect = nav.getBoundingClientRect();
+    nav.classList.toggle('is-stuck', rect.top <= 0 && window.scrollY > 0);
+    document.documentElement.style.setProperty('--megamenu-top', `${Math.max(rect.bottom, 0) + 8}px`);
+  };
+  const schedule = () => {
+    if (!ticking) {
+      ticking = true;
+      requestAnimationFrame(update);
+    }
+  };
+
+  window.addEventListener('scroll', schedule, { passive: true });
+  window.addEventListener('resize', schedule);
+  update();
+}
+
 function setupMegaMenu() {
   const megaMenu = document.getElementById('nav-megamenu');
   const closeMegaMenuBtn = document.getElementById('btn-close-megamenu');
