@@ -7,7 +7,7 @@ import { ensureAdminCredential, login, changePin, requireAdmin } from './auth.js
 import { unitPriceForQty } from '../src/pricing.js';
 
 const PORT = Number(process.env.PORT) || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const HOST = process.env.HOST || '::'; // IPv4 + IPv6 (o health check do Coolify usa localhost, que no Alpine resolve para ::1)
 const DIST_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 
 const db = await store.openDatabase();
