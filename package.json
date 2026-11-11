@@ -1,7 +1,8 @@
 {
-  "name": "coconutice",
+  "name": "gordinho-brindes",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "description": "Gordinho Brindes — E-commerce & Catálogo de Brindes Corporativos e Personalizados",
   "type": "module",
   "scripts": {
     "dev": "vite",

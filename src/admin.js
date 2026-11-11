@@ -1,4 +1,4 @@
-// Coconut Ice - Admin Management Panel Controller
+// Gordinho Brindes — Admin Management Panel Controller
 import { db } from './db.js';
 
 let currentTab = 'dashboard';
@@ -8,25 +8,90 @@ export function initAdmin(containerId = 'admin-app-root') {
   const container = document.getElementById(containerId);
   if (!container) return;
 
+  if (!db.isAuthenticated()) {
+    renderAuthScreen(container);
+    return;
+  }
+
   renderAdmin(container);
 
   // Subscribe to DB updates
   db.subscribe(({ key }) => {
-    // Re-render current tab if it affects current view
     renderCurrentTab();
   });
 }
 
+// ----------------------------------------------------
+// 0. AUTH SCREEN (PIN DE SEGURANÇA 2026)
+// ----------------------------------------------------
+function renderAuthScreen(container) {
+  container.innerHTML = `
+    <div class="admin-auth-overlay">
+      <div class="admin-auth-card">
+        <img src="/assets/mascot.png" alt="Mascote Gordinho Brindes" class="auth-logo-img" onerror="this.src='/favicon.png'">
+        <h2 class="auth-title">Gordinho <span>Brindes</span></h2>
+        <p class="auth-subtitle">Painel Administrativo & Central de Catálogo 2026</p>
+
+        <form id="admin-auth-form" class="auth-form" autocomplete="off">
+          <div class="admin-form-group">
+            <label for="admin-auth-pin" class="admin-form-label" style="color: #D2E4D8; text-align: center;">Digite o PIN de Acesso</label>
+            <div class="auth-input-wrap">
+              <input type="password" id="admin-auth-pin" class="auth-input" placeholder="••••" maxlength="12" required autofocus>
+            </div>
+          </div>
+
+          <div id="admin-auth-error" class="auth-error">PIN incorreto. Tente novamente.</div>
+
+          <button type="submit" class="btn-auth-submit">
+            <span>Acessar Painel</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+        </form>
+
+        <a href="/" class="auth-back-link">&larr; Voltar para a Loja Pública</a>
+      </div>
+    </div>
+  `;
+
+  const form = container.querySelector('#admin-auth-form');
+  const pinInput = container.querySelector('#admin-auth-pin');
+  const errorMsg = container.querySelector('#admin-auth-error');
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const pin = pinInput.value.trim();
+    const res = db.login(pin);
+    if (res.success) {
+      renderAdmin(container);
+    } else {
+      errorMsg.textContent = res.error || 'PIN incorreto. Tente novamente.';
+      errorMsg.style.display = 'block';
+      pinInput.value = '';
+      pinInput.focus();
+    }
+  });
+}
+
+// ----------------------------------------------------
+// 1. RENDER MAIN ADMIN INTERFACE
+// ----------------------------------------------------
 function renderAdmin(container) {
+  const settings = db.getSettings();
+
   container.innerHTML = `
     <div class="admin-layout">
+      <!-- Mobile Backdrop -->
+      <div class="admin-mobile-backdrop" id="admin-mobile-backdrop"></div>
+
       <!-- Sidebar -->
       <aside class="admin-sidebar" id="admin-sidebar">
         <div class="admin-sidebar-header">
-          <img src="/assets/logo-Mmxs5xoc.webp" alt="Coconut Ice" style="height: 32px; width: auto;" onerror="this.src='/favicon.png'">
+          <img src="/assets/mascot.png" alt="Gordinho Brindes" onerror="this.src='/favicon.png'">
           <div>
-            <div style="font-weight: 700; font-size: 14px; color: #27211D; line-height: 1.2;">Coconut Ice</div>
-            <span class="admin-brand-tag">Admin CMS</span>
+            <div style="font-weight: 900; font-family: var(--admin-font-heading); font-size: 15px; color: #FFFFFF; line-height: 1.1;">
+              GORDINHO <span style="color: var(--admin-primary);">BRINDES</span>
+            </div>
+            <span class="admin-brand-tag">Central de Controle</span>
           </div>
         </div>
 
@@ -38,7 +103,7 @@ function renderAdmin(container) {
           
           <button class="admin-nav-item ${currentTab === 'products' ? 'active' : ''}" data-tab="products">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
-            Produtos & Estoque
+            Produtos & Estoque (${db.getProducts().length})
           </button>
 
           <button class="admin-nav-item ${currentTab === 'orders' ? 'active' : ''}" data-tab="orders">
@@ -46,22 +111,27 @@ function renderAdmin(container) {
             Pedidos & Vendas
           </button>
 
+          <button class="admin-nav-item ${currentTab === 'categories' ? 'active' : ''}" data-tab="categories">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><circle cx="7" cy="7" r=".5" fill="currentColor"/></svg>
+            Categorias
+          </button>
+
           <button class="admin-nav-item ${currentTab === 'settings' ? 'active' : ''}" data-tab="settings">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-            Configurações do Site
+            Configurações & CMS
           </button>
 
-          <button class="admin-nav-item ${currentTab === 'database' ? 'active' : ''}" data-tab="database">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-            Banco de Dados & Backup
-          </button>
         </nav>
 
-        <div style="padding: 16px; border-top: 1px solid var(--admin-border);">
-          <a href="/" class="admin-btn admin-btn-secondary" style="width: 100%;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <div class="admin-sidebar-footer">
+          <a href="/" class="admin-btn admin-btn-secondary" style="width: 100%; font-size: 12px; background: rgba(255, 255, 255, 0.08); color: #FFFFFF; border-color: rgba(255, 255, 255, 0.15);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
             Voltar para a Loja
           </a>
+          <button id="btn-admin-logout" class="admin-btn admin-btn-danger admin-btn-sm" style="width: 100%; font-size: 11px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Sair do Painel
+          </button>
         </div>
       </aside>
 
@@ -69,19 +139,26 @@ function renderAdmin(container) {
       <main class="admin-main">
         <header class="admin-topbar">
           <div style="display: flex; align-items: center; gap: 14px;">
-            <button id="admin-mobile-menu-toggle" class="admin-btn admin-btn-secondary admin-btn-sm" style="display: none;">
+            <button id="admin-mobile-menu-toggle" class="admin-btn admin-btn-secondary admin-btn-sm" aria-label="Abrir menu" style="display: none;">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
             </button>
-            <h1 id="admin-top-title" style="font-size: 18px; font-weight: 700; margin: 0; color: #27211D;">Painel Administrativo</h1>
+            <h1 id="admin-top-title" style="font-family: var(--admin-font-heading); font-size: 18px; font-weight: 800; margin: 0; color: #0F172A;">
+              Painel de Controle
+            </h1>
           </div>
 
-          <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
             <button id="btn-quick-new-product" class="admin-btn admin-btn-primary admin-btn-sm">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Novo Produto
             </button>
 
-            <a href="/" target="_blank" class="admin-btn admin-btn-secondary admin-btn-sm" title="Abrir loja em nova aba">
+            <button id="btn-quick-new-order" class="admin-btn admin-btn-forest admin-btn-sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Novo Pedido
+            </button>
+
+            <a href="/" target="_blank" class="admin-btn admin-btn-secondary admin-btn-sm" title="Abrir catálogo em nova aba">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
               Ver Loja
             </a>
@@ -104,15 +181,38 @@ function renderAdmin(container) {
     btn.addEventListener('click', () => {
       const tab = btn.getAttribute('data-tab');
       switchTab(tab);
+      closeMobileSidebar();
     });
   });
 
-  const quickNewProductBtn = container.querySelector('#btn-quick-new-product');
-  if (quickNewProductBtn) {
-    quickNewProductBtn.addEventListener('click', () => openProductModal());
+  // Mobile drawer toggle
+  const mobileToggle = container.querySelector('#admin-mobile-menu-toggle');
+  const sidebar = container.querySelector('#admin-sidebar');
+  const backdrop = container.querySelector('#admin-mobile-backdrop');
+
+  function openMobileSidebar() {
+    sidebar.classList.add('open');
+    backdrop.classList.add('open');
   }
 
-  // Initial tab render
+  function closeMobileSidebar() {
+    sidebar.classList.remove('open');
+    backdrop.classList.remove('open');
+  }
+
+  if (mobileToggle) mobileToggle.addEventListener('click', openMobileSidebar);
+  if (backdrop) backdrop.addEventListener('click', closeMobileSidebar);
+
+  // Quick action buttons in header
+  container.querySelector('#btn-quick-new-product')?.addEventListener('click', () => openProductModal());
+  container.querySelector('#btn-quick-new-order')?.addEventListener('click', () => openManualOrderModal());
+  container.querySelector('#btn-admin-logout')?.addEventListener('click', () => {
+    if (confirm('Deseja encerrar a sessão do painel?')) {
+      db.logout();
+      initAdmin(container.id);
+    }
+  });
+
   renderCurrentTab();
 }
 
@@ -136,30 +236,30 @@ function renderCurrentTab() {
       renderDashboardView(contentEl);
       break;
     case 'products':
-      if (titleEl) titleEl.textContent = 'Gerenciamento de Produtos';
+      if (titleEl) titleEl.textContent = 'Gerenciamento de Produtos & Estoque';
       renderProductsView(contentEl);
       break;
     case 'orders':
-      if (titleEl) titleEl.textContent = 'Pedidos & Orçamentos';
+      if (titleEl) titleEl.textContent = 'Pedidos & Orçamentos Recebidos';
       renderOrdersView(contentEl);
       break;
-    case 'settings':
-      if (titleEl) titleEl.textContent = 'Configurações da Loja';
-      renderSettingsView(contentEl);
+    case 'categories':
+      if (titleEl) titleEl.textContent = 'Categorias de Produtos';
+      renderCategoriesView(contentEl);
       break;
-    case 'database':
-      if (titleEl) titleEl.textContent = 'Banco de Dados & Backups';
-      renderDatabaseView(contentEl);
+    case 'settings':
+      if (titleEl) titleEl.textContent = 'Configurações da Loja & Conteúdo';
+      renderSettingsView(contentEl);
       break;
   }
 }
 
 // ----------------------------------------------------
-// 1. DASHBOARD VIEW
+// 2. DASHBOARD VIEW
 // ----------------------------------------------------
 function renderDashboardView(container) {
   const metrics = db.getMetrics();
-  const recentOrders = db.getOrders().slice(0, 5);
+  const recentOrders = db.getOrders().slice(0, 6);
 
   container.innerHTML = `
     <!-- KPI Metrics -->
@@ -167,11 +267,11 @@ function renderDashboardView(container) {
       <div class="admin-metric-card">
         <div>
           <div class="admin-metric-label">Faturamento Total</div>
-          <div class="admin-metric-value">R$ ${metrics.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-          <div style="font-size: 11px; color: #3E7921; font-weight: 600; margin-top: 4px;">↑ Em pedidos corporativos</div>
+          <div class="admin-metric-value" style="color: #16A34A;">R$ ${metrics.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+          <div style="font-size: 11px; color: #16A34A; font-weight: 700; margin-top: 4px;">↑ Em pedidos corporativos</div>
         </div>
-        <div class="admin-metric-icon" style="background: #eaf3e6; color: #3E7921;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        <div class="admin-metric-icon" style="background: #eaf5ea; color: #16A34A;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         </div>
       </div>
 
@@ -179,9 +279,9 @@ function renderDashboardView(container) {
         <div>
           <div class="admin-metric-label">Pedidos Registrados</div>
           <div class="admin-metric-value">${metrics.totalOrders}</div>
-          <div style="font-size: 11px; color: #786C65; margin-top: 4px;">${metrics.pendingOrders} pendentes de aprovação</div>
+          <div style="font-size: 11px; color: #B45309; font-weight: 600; margin-top: 4px;">${metrics.pendingOrders} pendentes · ${metrics.inProductionOrders} em produção</div>
         </div>
-        <div class="admin-metric-icon" style="background: #f7ede6; color: #A96739;">
+        <div class="admin-metric-icon" style="background: rgba(250, 184, 24, 0.18); color: #B45309;">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
         </div>
       </div>
@@ -190,38 +290,47 @@ function renderDashboardView(container) {
         <div>
           <div class="admin-metric-label">Produtos no Catálogo</div>
           <div class="admin-metric-value">${metrics.totalProducts}</div>
-          <div style="font-size: 11px; color: #3E7921; margin-top: 4px;">${metrics.activeProducts} ativos com pronta entrega</div>
+          <div style="font-size: 11px; color: #0F3822; font-weight: 600; margin-top: 4px;">${metrics.activeProducts} ativos · ${metrics.totalCategories} categorias</div>
         </div>
-        <div class="admin-metric-icon" style="background: #eef2ff; color: #4338ca;">
+        <div class="admin-metric-icon" style="background: rgba(15, 56, 34, 0.1); color: #0F3822;">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/></svg>
         </div>
       </div>
 
       <div class="admin-metric-card">
         <div>
-          <div class="admin-metric-label">Cashback de Boas-Vindas</div>
-          <div class="admin-metric-value">${metrics.cashbackPercent}%</div>
-          <div style="font-size: 11px; color: #A96739; margin-top: 4px;">Ativo no pop-up inicial</div>
+          <div class="admin-metric-label">Ticket Médio</div>
+          <div class="admin-metric-value">R$ ${metrics.avgTicket.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div style="font-size: 11px; color: #64748B; margin-top: 4px;">Por solicitação de orçamento</div>
         </div>
-        <div class="admin-metric-icon" style="background: #fef8e7; color: #b45309;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></svg>
+        <div class="admin-metric-icon" style="background: #f1f5f9; color: #475569;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         </div>
       </div>
     </div>
 
     <!-- Quick Actions Banner -->
-    <div class="admin-card" style="background: linear-gradient(135deg, #FAF4EF 0%, #F5EAE0 100%); border-color: rgba(169, 103, 57, 0.2);">
+    <div class="admin-card" style="background: linear-gradient(135deg, #0F3822 0%, #06180E 100%); border-color: rgba(250, 184, 24, 0.25); color: #FFFFFF;">
       <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
         <div>
-          <h2 style="font-size: 16px; font-weight: 700; color: #27211D; margin: 0 0 4px 0;">Painel de Controle em Tempo Real</h2>
-          <p style="font-size: 13px; color: #786C65; margin: 0;">Todas as alterações feitas nos produtos, preços ou banners refletem instantaneamente no site principal.</p>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em; background: rgba(250, 184, 24, 0.2); color: #FAB818; padding: 2px 8px; border-radius: 9999px;">
+              Sincronia em Tempo Real
+            </span>
+          </div>
+          <h2 style="font-family: var(--admin-font-heading); font-size: 18px; font-weight: 800; color: #FFFFFF; margin: 6px 0 4px 0;">
+            Gordinho Brindes — Parque Gráfico & Operações 2026
+          </h2>
+          <p style="font-size: 13px; color: #D2E4D8; margin: 0; max-width: 650px;">
+            Qualquer alteração em preços, produtos, faixas de desconto ou banners reflete instantaneamente na loja pública.
+          </p>
         </div>
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
           <button id="dash-btn-new-product" class="admin-btn admin-btn-primary">
-            + Cadastrar Novo Produto
+            + Cadastrar Produto
           </button>
-          <button id="dash-btn-simulate-order" class="admin-btn admin-btn-secondary">
-            Simular Novo Pedido
+          <button id="dash-btn-manual-order" class="admin-btn" style="background: rgba(255, 255, 255, 0.12); color: #FFFFFF; border: 1px solid rgba(255, 255, 255, 0.2);">
+            + Criar Pedido Manual
           </button>
         </div>
       </div>
@@ -230,8 +339,8 @@ function renderDashboardView(container) {
     <!-- Recent Orders Table -->
     <div class="admin-card">
       <div class="admin-card-header">
-        <h2 class="admin-card-title">Pedidos Recentes</h2>
-        <button class="admin-btn admin-btn-secondary admin-btn-sm" id="dash-btn-view-all-orders">Ver Todos</button>
+        <h2 class="admin-card-title">Pedidos e Orçamentos Recentes</h2>
+        <button class="admin-btn admin-btn-secondary admin-btn-sm" id="dash-btn-view-all-orders">Ver Todos os Pedidos →</button>
       </div>
 
       <div class="admin-table-container">
@@ -250,17 +359,17 @@ function renderDashboardView(container) {
           <tbody>
             ${recentOrders.map(order => `
               <tr>
-                <td><strong>${order.id}</strong></td>
+                <td><strong style="color: #0F172A;">${order.id}</strong></td>
                 <td>
-                  <div style="font-weight: 600;">${order.customer.name}</div>
-                  <div style="font-size: 11px; color: #786C65;">${order.customer.company || 'Pessoa Física'}</div>
+                  <div style="font-weight: 700; color: #0F172A;">${escapeHtml(order.customer.name)}</div>
+                  <div style="font-size: 11px; color: #16A34A; font-weight: 700;">${escapeHtml(order.customer.company || 'Pessoa Física')}</div>
                 </td>
-                <td>${order.items.map(i => `${i.quantity}x ${i.name}`).join('<br>')}</td>
-                <td><strong style="color: #3E7921;">R$ ${parseFloat(order.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></td>
+                <td style="font-size: 12px;">${order.items.map(i => `<div><strong>${i.quantity}x</strong> ${escapeHtml(i.name)}</div>`).join('')}</td>
+                <td><strong style="color: #16A34A; font-size: 14px;">R$ ${parseFloat(order.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></td>
                 <td><span class="admin-badge ${getStatusBadgeClass(order.status)}">${order.status}</span></td>
-                <td style="color: #786C65; font-size: 12px;">${order.date}</td>
+                <td style="color: #64748B; font-size: 12px;">${order.date}</td>
                 <td style="text-align: right;">
-                  <button class="admin-btn admin-btn-secondary admin-btn-sm" onclick="window.viewOrderDetails('${order.id}')">Detalhes</button>
+                  <button class="admin-btn admin-btn-secondary admin-btn-sm" onclick="window.viewOrderDetails('${order.id}')">Ver Detalhes</button>
                 </td>
               </tr>
             `).join('')}
@@ -270,19 +379,13 @@ function renderDashboardView(container) {
     </div>
   `;
 
-  // Attach dashboard buttons
-  const newProdBtn = container.querySelector('#dash-btn-new-product');
-  if (newProdBtn) newProdBtn.addEventListener('click', () => openProductModal());
-
-  const viewAllOrdersBtn = container.querySelector('#dash-btn-view-all-orders');
-  if (viewAllOrdersBtn) viewAllOrdersBtn.addEventListener('click', () => switchTab('orders'));
-
-  const simOrderBtn = container.querySelector('#dash-btn-simulate-order');
-  if (simOrderBtn) simOrderBtn.addEventListener('click', () => simulateTestOrder());
+  container.querySelector('#dash-btn-new-product')?.addEventListener('click', () => openProductModal());
+  container.querySelector('#dash-btn-manual-order')?.addEventListener('click', () => openManualOrderModal());
+  container.querySelector('#dash-btn-view-all-orders')?.addEventListener('click', () => switchTab('orders'));
 }
 
 // ----------------------------------------------------
-// 2. PRODUCTS VIEW (CATÁLOGO CRUD)
+// 3. PRODUCTS VIEW (CATÁLOGO COMPLETO CRUD)
 // ----------------------------------------------------
 function renderProductsView(container) {
   const products = db.getProducts();
@@ -292,8 +395,10 @@ function renderProductsView(container) {
     <div class="admin-card">
       <div class="admin-card-header">
         <div>
-          <h2 class="admin-card-title">Catálogo de Produtos (${products.length})</h2>
-          <p style="font-size: 12px; color: #786C65; margin: 4px 0 0 0;">Adicione, edite preços ou remova produtos que aparecem no site.</p>
+          <h2 class="admin-card-title">Catálogo Completo de Produtos (${products.length})</h2>
+          <p style="font-size: 12px; color: #64748B; margin: 4px 0 0 0;">
+            Gerencie fotos, preços progressivos por atacado, estoque, cores e visibilidade na loja.
+          </p>
         </div>
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
           <input type="text" id="product-search-input" class="admin-input" placeholder="Buscar por nome ou SKU..." style="width: 220px;">
@@ -311,12 +416,13 @@ function renderProductsView(container) {
         <table class="admin-table" id="products-table">
           <thead>
             <tr>
-              <th style="width: 60px;">Foto</th>
+              <th style="width: 54px;">Foto</th>
               <th>Produto</th>
               <th>SKU</th>
               <th>Categoria</th>
-              <th>Preço Unitário</th>
-              <th>Desconto Máx.</th>
+              <th>Preço Base (100 un.)</th>
+              <th>Economize Até</th>
+              <th>Estoque</th>
               <th>Status</th>
               <th style="text-align: right;">Ações</th>
             </tr>
@@ -355,26 +461,31 @@ function renderProductsView(container) {
 
 function renderProductRows(products) {
   if (!products.length) {
-    return `<tr><td colspan="8" style="text-align: center; padding: 32px; color: #786C65;">Nenhum produto encontrado.</td></tr>`;
+    return `<tr><td colspan="9" style="text-align: center; padding: 36px; color: #64748B;">Nenhum produto encontrado.</td></tr>`;
   }
 
   return products.map(prod => `
     <tr>
       <td>
-        <img src="${prod.image || '/favicon.png'}" alt="${prod.name}" style="width: 44px; height: 44px; object-fit: contain; border-radius: 8px; border: 1px solid #E8E2D9; background: #fff;">
+        <img src="${prod.image || '/favicon.png'}" alt="${escapeHtml(prod.name)}" style="width: 44px; height: 44px; object-fit: contain; border-radius: 8px; border: 1px solid #E2E8F0; background: #fff;" onerror="this.src='/favicon.png'">
       </td>
       <td>
-        <div style="font-weight: 600; color: #27211D;">${prod.name}</div>
-        <div style="font-size: 11px; color: #786C65; max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${prod.description || ''}</div>
+        <div style="font-weight: 700; color: #0F172A;">${escapeHtml(prod.name)}</div>
+        <div style="font-size: 11px; color: #64748B; max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+          ${escapeHtml(prod.description || '')}
+        </div>
       </td>
-      <td><code style="background: #F5EFEA; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; color: #A96739;">${prod.sku || '-'}</code></td>
-      <td><span class="admin-badge badge-gray">${prod.category || 'Geral'}</span></td>
+      <td><code style="background: #F1F5F9; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #0F3822;">${prod.sku || '-'}</code></td>
+      <td><span class="admin-badge badge-gray">${escapeHtml(prod.category || 'Geral')}</span></td>
       <td>
-        <div style="font-weight: 700; color: #27211D;">R$ ${parseFloat(prod.basePrice).toFixed(2).replace('.', ',')}</div>
-        ${prod.originalPrice ? `<div style="font-size: 10px; text-decoration: line-through; color: #9CA3AF;">R$ ${parseFloat(prod.originalPrice).toFixed(2).replace('.', ',')}</div>` : ''}
+        <div style="font-weight: 800; color: #16A34A;">R$ ${parseFloat(prod.basePrice).toFixed(2).replace('.', ',')}</div>
+        ${prod.originalPrice ? `<div style="font-size: 10px; text-decoration: line-through; color: #94A3B8;">R$ ${parseFloat(prod.originalPrice).toFixed(2).replace('.', ',')}</div>` : ''}
       </td>
       <td>
         ${prod.maxDiscount ? `<span class="admin-badge badge-green">-${prod.maxDiscount}%</span>` : '-'}
+      </td>
+      <td>
+        <span style="font-size: 12px; font-weight: 700; color: #0F172A;">${prod.stockQuantity ?? 1000} un.</span>
       </td>
       <td>
         ${prod.inStock 
@@ -384,11 +495,11 @@ function renderProductRows(products) {
       <td style="text-align: right;">
         <div style="display: inline-flex; gap: 6px;">
           <button class="admin-btn admin-btn-secondary admin-btn-sm" onclick="window.editProduct('${prod.id}')" title="Editar Produto">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             Editar
           </button>
           <button class="admin-btn admin-btn-danger admin-btn-sm" onclick="window.deleteProduct('${prod.id}')" title="Excluir">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           </button>
         </div>
       </td>
@@ -397,7 +508,7 @@ function renderProductRows(products) {
 }
 
 // ----------------------------------------------------
-// 3. ORDERS VIEW (PEDIDOS CMS)
+// 4. ORDERS VIEW (GESTÃO DE PEDIDOS & ORÇAMENTOS)
 // ----------------------------------------------------
 function renderOrdersView(container) {
   const orders = db.getOrders();
@@ -407,11 +518,153 @@ function renderOrdersView(container) {
       <div class="admin-card-header">
         <div>
           <h2 class="admin-card-title">Gestão de Pedidos & Orçamentos (${orders.length})</h2>
-          <p style="font-size: 12px; color: #786C65; margin: 4px 0 0 0;">Acompanhe solicitações de clientes corporativos e atualize o status da produção.</p>
+          <p style="font-size: 12px; color: #64748B; margin: 4px 0 0 0;">
+            Acompanhe solicitações de clientes, faturamento, produção e contato direto via WhatsApp.
+          </p>
         </div>
-        <div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <input type="text" id="order-search-input" class="admin-input" placeholder="Buscar por cliente, ID ou empresa..." style="width: 250px;">
+          <select id="order-status-filter" class="admin-select" style="width: 170px;">
+            <option value="">Todos os Status</option>
+            <option value="Pendente">⏳ Pendente</option>
+            <option value="Aprovado">✓ Aprovado</option>
+            <option value="Em Produção">⚙️ Em Produção</option>
+            <option value="Enviado">🚚 Enviado</option>
+            <option value="Concluído">⭐ Concluído</option>
+            <option value="Cancelado">✕ Cancelado</option>
+          </select>
           <button id="btn-create-order" class="admin-btn admin-btn-primary">
             + Novo Pedido Manual
+          </button>
+        </div>
+      </div>
+
+      <div class="admin-table-container">
+        <table class="admin-table" id="orders-table">
+          <thead>
+            <tr>
+              <th>ID Pedido</th>
+              <th>Data/Hora</th>
+              <th>Cliente & Empresa</th>
+              <th>Contato & WhatsApp</th>
+              <th>Itens</th>
+              <th>Total</th>
+              <th>Status</th>
+              <th style="text-align: right;">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="orders-table-body">
+            ${renderOrderRows(orders)}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  const searchInput = container.querySelector('#order-search-input');
+  const statusFilter = container.querySelector('#order-status-filter');
+
+  function filterOrders() {
+    const query = (searchInput?.value || '').toLowerCase().trim();
+    const status = statusFilter?.value || '';
+
+    const filtered = orders.filter(o => {
+      const matchQuery = !query ||
+        o.id.toLowerCase().includes(query) ||
+        (o.customer?.name && o.customer.name.toLowerCase().includes(query)) ||
+        (o.customer?.company && o.customer.company.toLowerCase().includes(query)) ||
+        (o.customer?.phone && o.customer.phone.includes(query));
+      const matchStatus = !status || o.status === status;
+      return matchQuery && matchStatus;
+    });
+
+    const tbody = container.querySelector('#orders-table-body');
+    if (tbody) tbody.innerHTML = renderOrderRows(filtered);
+  }
+
+  if (searchInput) searchInput.addEventListener('input', filterOrders);
+  if (statusFilter) statusFilter.addEventListener('change', filterOrders);
+
+  container.querySelector('#btn-create-order')?.addEventListener('click', () => openManualOrderModal());
+}
+
+function renderOrderRows(orders) {
+  if (!orders.length) {
+    return `<tr><td colspan="8" style="text-align: center; padding: 36px; color: #64748B;">Nenhum pedido encontrado.</td></tr>`;
+  }
+
+  return orders.map(o => {
+    const rawPhone = (o.customer.phone || '').replace(/\D/g, '');
+    const waUrl = rawPhone ? `https://wa.me/55${rawPhone}?text=${encodeURIComponent(`Olá ${o.customer.name}! Sou da equipe Gordinho Brindes referente ao seu pedido #${o.id}.`)}` : '';
+
+    return `
+      <tr>
+        <td><strong style="color: #0F172A;">${o.id}</strong></td>
+        <td style="font-size: 12px; color: #64748B;">${o.date}</td>
+        <td>
+          <div style="font-weight: 700; color: #0F172A;">${escapeHtml(o.customer.name)}</div>
+          <div style="font-size: 11px; color: #16A34A; font-weight: 700;">${escapeHtml(o.customer.company || 'Pessoa Física')}</div>
+        </td>
+        <td style="font-size: 12px;">
+          <div>${escapeHtml(o.customer.phone || '-')}</div>
+          <div style="color: #64748B; font-size: 11px;">${escapeHtml(o.customer.email || '-')}</div>
+        </td>
+        <td style="font-size: 12px;">
+          ${o.items.map(it => `<div><strong>${it.quantity}x</strong> ${escapeHtml(it.name)}</div>`).join('')}
+        </td>
+        <td>
+          <strong style="color: #16A34A; font-size: 14px;">R$ ${parseFloat(o.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+          <div style="font-size: 10px; color: #64748B;">${escapeHtml(o.paymentMethod || 'À vista')}</div>
+        </td>
+        <td>
+          <select class="admin-select" style="font-size: 12px; padding: 5px 8px; width: 135px;" onchange="window.updateOrderStatus('${o.id}', this.value)">
+            <option value="Pendente" ${o.status === 'Pendente' ? 'selected' : ''}>⏳ Pendente</option>
+            <option value="Aprovado" ${o.status === 'Aprovado' ? 'selected' : ''}>✓ Aprovado</option>
+            <option value="Em Produção" ${o.status === 'Em Produção' ? 'selected' : ''}>⚙️ Em Produção</option>
+            <option value="Enviado" ${o.status === 'Enviado' ? 'selected' : ''}>🚚 Enviado</option>
+            <option value="Concluído" ${o.status === 'Concluído' ? 'selected' : ''}>⭐ Concluído</option>
+            <option value="Cancelado" ${o.status === 'Cancelado' ? 'selected' : ''}>✕ Cancelado</option>
+          </select>
+        </td>
+        <td style="text-align: right;">
+          <div style="display: inline-flex; gap: 6px;">
+            <button class="admin-btn admin-btn-secondary admin-btn-sm" onclick="window.viewOrderDetails('${o.id}')" title="Ver Detalhes do Pedido">
+              Detalhes
+            </button>
+            ${waUrl ? `
+              <a href="${waUrl}" target="_blank" rel="noopener" class="admin-btn admin-btn-sm" style="background: #25D366; color: #FFFFFF;" title="Conversar no WhatsApp">
+                WA
+              </a>
+            ` : ''}
+            <button class="admin-btn admin-btn-danger admin-btn-sm" onclick="window.deleteOrder('${o.id}')" title="Excluir">
+              ✕
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ----------------------------------------------------
+// 5. CATEGORIES VIEW
+// ----------------------------------------------------
+function renderCategoriesView(container) {
+  const categories = db.getCategories();
+  const products = db.getProducts();
+
+  container.innerHTML = `
+    <div class="admin-card" style="max-width: 900px;">
+      <div class="admin-card-header">
+        <div>
+          <h2 class="admin-card-title">Categorias do Catálogo (${categories.length})</h2>
+          <p style="font-size: 12px; color: #64748B; margin: 4px 0 0 0;">
+            Adicione novas linhas de produtos ou edite as existentes para organizar a loja.
+          </p>
+        </div>
+        <div>
+          <button id="btn-add-category" class="admin-btn admin-btn-primary">
+            + Nova Categoria
           </button>
         </div>
       </div>
@@ -420,119 +673,117 @@ function renderOrdersView(container) {
         <table class="admin-table">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Data/Hora</th>
-              <th>Cliente & Empresa</th>
-              <th>Contato</th>
-              <th>Itens do Pedido</th>
-              <th>Total</th>
-              <th>Status do Pedido</th>
+              <th>Nome da Categoria</th>
+              <th>Slug / Link</th>
+              <th>Qtd. de Produtos</th>
               <th style="text-align: right;">Ações</th>
             </tr>
           </thead>
           <tbody>
-            ${orders.map(o => `
-              <tr>
-                <td><strong>${o.id}</strong></td>
-                <td style="font-size: 12px; color: #786C65;">${o.date}</td>
-                <td>
-                  <div style="font-weight: 600;">${o.customer.name}</div>
-                  <div style="font-size: 11px; color: #A96739; font-weight: 600;">${o.customer.company || 'Pessoa Física'}</div>
-                </td>
-                <td style="font-size: 12px;">
-                  <div>${o.customer.phone || '-'}</div>
-                  <div style="color: #786C65; font-size: 11px;">${o.customer.email || '-'}</div>
-                </td>
-                <td style="font-size: 12px;">
-                  ${o.items.map(it => `<div><strong>${it.quantity}x</strong> ${it.name}</div>`).join('')}
-                </td>
-                <td>
-                  <strong style="color: #3E7921; font-size: 14px;">R$ ${parseFloat(o.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
-                  <div style="font-size: 10px; color: #786C65;">${o.paymentMethod || 'À vista'}</div>
-                </td>
-                <td>
-                  <select class="admin-select" style="font-size: 12px; padding: 4px 8px; width: 130px;" onchange="window.updateOrderStatus('${o.id}', this.value)">
-                    <option value="Pendente" ${o.status === 'Pendente' ? 'selected' : ''}>⏳ Pendente</option>
-                    <option value="Aprovado" ${o.status === 'Aprovado' ? 'selected' : ''}>✓ Aprovado</option>
-                    <option value="Em Produção" ${o.status === 'Em Produção' ? 'selected' : ''}>⚙️ Em Produção</option>
-                    <option value="Enviado" ${o.status === 'Enviado' ? 'selected' : ''}>🚚 Enviado</option>
-                    <option value="Concluído" ${o.status === 'Concluído' ? 'selected' : ''}>⭐ Concluído</option>
-                    <option value="Cancelado" ${o.status === 'Cancelado' ? 'selected' : ''}>✕ Cancelado</option>
-                  </select>
-                </td>
-                <td style="text-align: right;">
-                  <button class="admin-btn admin-btn-danger admin-btn-sm" onclick="window.deleteOrder('${o.id}')" title="Excluir Pedido">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                  </button>
-                </td>
-              </tr>
-            `).join('')}
+            ${categories.map(c => {
+              const count = products.filter(p => p.category === c.name).length;
+              return `
+                <tr>
+                  <td><strong style="color: #0F172A; font-size: 14px;">${escapeHtml(c.name)}</strong></td>
+                  <td><code style="background: #F1F5F9; padding: 2px 8px; border-radius: 4px; font-size: 11px; color: #0F3822;">/categoria/${c.slug}</code></td>
+                  <td><span class="admin-badge badge-forest">${count} produtos</span></td>
+                  <td style="text-align: right;">
+                    <div style="display: inline-flex; gap: 6px;">
+                      <button class="admin-btn admin-btn-secondary admin-btn-sm" onclick="window.editCategory('${c.id}')">Editar</button>
+                      <button class="admin-btn admin-btn-danger admin-btn-sm" onclick="window.deleteCategory('${c.id}')">Excluir</button>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
           </tbody>
         </table>
       </div>
     </div>
   `;
 
-  const createOrderBtn = container.querySelector('#btn-create-order');
-  if (createOrderBtn) createOrderBtn.addEventListener('click', () => simulateTestOrder());
+  container.querySelector('#btn-add-category')?.addEventListener('click', () => openCategoryModal());
 }
 
 // ----------------------------------------------------
-// 4. SETTINGS VIEW (CMS DO SITE)
+// 6. SETTINGS VIEW (CMS DO SITE)
 // ----------------------------------------------------
 function renderSettingsView(container) {
   const settings = db.getSettings();
+  const reelsText = (settings.instagramReels || []).join('\n');
+
+  const sectionTitle = (title, help) => `
+    <div style="grid-column: 1 / -1; margin: 22px 0 4px; padding-top: 18px; border-top: 1px solid #E2E8F0;">
+      <h3 style="font-family: var(--admin-font-heading); font-size: 15px; font-weight: 800; color: #0F172A; margin: 0;">${title}</h3>
+      ${help ? `<p style="font-size: 12px; color: #64748B; margin: 4px 0 0 0;">${help}</p>` : ''}
+    </div>`;
+
+  const field = (id, label, value, { type = 'text', help = '', attrs = '' } = {}) => `
+    <div class="admin-form-group">
+      <label class="admin-form-label" for="${id}">${label}</label>
+      <input type="${type}" id="${id}" class="admin-input" value="${escapeHtml(value ?? '')}" ${attrs}>
+      ${help ? `<div class="admin-form-help">${help}</div>` : ''}
+    </div>`;
 
   container.innerHTML = `
-    <div class="admin-card" style="max-width: 800px;">
+    <div class="admin-card" style="max-width: 860px;">
       <div class="admin-card-header">
         <div>
           <h2 class="admin-card-title">Configurações Gerais & Conteúdo da Loja</h2>
-          <p style="font-size: 12px; color: #786C65; margin: 4px 0 0 0;">Altere mensagens promocionais, cashback e formas de contato.</p>
+          <p style="font-size: 12px; color: #64748B; margin: 4px 0 0 0;">
+            Tudo o que for salvo aqui é aplicado em todo o site: cabeçalho, rodapé, botões de WhatsApp, links das redes sociais e textos promocionais.
+          </p>
         </div>
       </div>
 
       <form id="settings-form">
-        <div class="admin-form-group">
-          <label class="admin-form-label">Faixa de Anúncio Superior (Aviso no Topo do Site)</label>
-          <input type="text" id="setting-announcement" class="admin-input" value="${settings.announcementText || ''}">
-          <div class="admin-form-help">Texto exibido na barra superior em todas as páginas da loja.</div>
-        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px;">
+          ${sectionTitle('Identidade da loja')}
+          ${field('setting-store-name', 'Nome da Marca / Loja', settings.storeName, { help: 'Usado no título da página, rodapé e textos institucionais.' })}
+          ${field('setting-store-subtitle', 'Subtítulo / Slogan', settings.storeSubtitle)}
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-          <div class="admin-form-group">
-            <label class="admin-form-label">Porcentagem de Cashback de Boas-Vindas (%)</label>
-            <input type="number" id="setting-cashback" class="admin-input" value="${settings.cashbackPercent || 3}" min="1" max="50">
-            <div class="admin-form-help">Atualiza o pop-up de boas-vindas do site automaticamente.</div>
+          ${sectionTitle('Dados legais', 'Exibidos no rodapé do site.')}
+          ${field('setting-legal-name', 'Razão Social', settings.companyLegalName)}
+          ${field('setting-cnpj', 'CNPJ', settings.cnpj, { attrs: 'placeholder="00.000.000/0000-00"' })}
+          ${field('setting-state-registration', 'Inscrição Estadual', settings.stateRegistration, { help: 'Deixe vazio para ocultar.' })}
+          ${field('setting-address', 'Endereço da Fábrica / Loja Física', settings.address)}
+
+          ${sectionTitle('Atendimento')}
+          ${field('setting-whatsapp', 'WhatsApp Comercial (somente números, com DDI e DDD)', settings.whatsappNumber, { help: 'Exemplo: 5547984965444. Atualiza todos os botões e links de WhatsApp.' })}
+          ${field('setting-whatsapp-display', 'Telefone / WhatsApp Formatado', settings.whatsappDisplay, { help: 'Como o número aparece escrito no site.' })}
+          ${field('setting-email', 'E-mail de Suporte / Vendas', settings.supportEmail, { type: 'email', help: 'Deixe vazio para ocultar o e-mail no rodapé.' })}
+          ${field('setting-hours', 'Horário de Atendimento', settings.businessHours)}
+
+          ${sectionTitle('Redes sociais')}
+          ${field('setting-instagram', 'Instagram Oficial', settings.instagramHandle, { help: 'Aceita @usuario ou o link do perfil. Atualiza todos os links e menções ao Instagram.' })}
+          ${field('setting-facebook', 'Facebook (link)', settings.facebookUrl, { type: 'url' })}
+          ${field('setting-youtube', 'YouTube (link)', settings.youtubeUrl, { type: 'url' })}
+          ${field('setting-tiktok', 'TikTok (link)', settings.tiktokUrl, { type: 'url' })}
+
+          ${sectionTitle('Reels do Instagram', 'Um link de reel por linha (ex.: https://www.instagram.com/reel/ABC123/). Aparecem na seção de Instagram da loja, na ordem informada.')}
+          <div class="admin-form-group" style="grid-column: 1 / -1;">
+            <textarea id="setting-reels" class="admin-textarea" rows="6" placeholder="https://www.instagram.com/reel/...">${escapeHtml(reelsText)}</textarea>
           </div>
 
-          <div class="admin-form-group">
-            <label class="admin-form-label">Desconto no Pix à Vista (%)</label>
-            <input type="number" id="setting-pix" class="admin-input" value="${settings.pixDiscountPercent || 5}" min="0" max="30">
-            <div class="admin-form-help">Desconto concedido nas compras à vista.</div>
+          ${sectionTitle('Promoções e pagamento')}
+          <div class="admin-form-group" style="grid-column: 1 / -1;">
+            <label class="admin-form-label" for="setting-announcement">Faixa de Aviso Promocional no Topo do Site</label>
+            <input type="text" id="setting-announcement" class="admin-input" value="${escapeHtml(settings.announcementText || '')}">
+            <label style="display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: #334155;">
+              <input type="checkbox" id="setting-announcement-visible" ${settings.announcementVisible !== false ? 'checked' : ''}>
+              Exibir a faixa de aviso no topo da loja
+            </label>
           </div>
-        </div>
+          ${field('setting-cashback', 'Cashback de Boas-Vindas (%)', settings.cashbackPercent, { type: 'number', attrs: 'min="0" max="50"' })}
+          ${field('setting-pix', 'Desconto no Pix à Vista (%)', settings.pixDiscountPercent, { type: 'number', attrs: 'min="0" max="30"' })}
+          ${field('setting-installments', 'Parcelas sem juros (máx.)', settings.maxInstallments, { type: 'number', attrs: 'min="1" max="24"' })}
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-          <div class="admin-form-group">
-            <label class="admin-form-label">WhatsApp Comercial (com DDD)</label>
-            <input type="text" id="setting-whatsapp" class="admin-input" value="${settings.whatsappNumber || ''}">
-            <div class="admin-form-help">Número para o botão flutuante de atendimento.</div>
-          </div>
-
-          <div class="admin-form-group">
-            <label class="admin-form-label">E-mail de Suporte</label>
-            <input type="email" id="setting-email" class="admin-input" value="${settings.supportEmail || ''}">
-          </div>
-        </div>
-
-        <div class="admin-form-group">
-          <label class="admin-form-label">Nome da Empresa / Loja</label>
-          <input type="text" id="setting-store-name" class="admin-input" value="${settings.storeName || ''}">
+          ${sectionTitle('Segurança')}
+          ${field('setting-pin', 'PIN do Painel Admin', settings.adminPin, { attrs: 'maxlength="12" autocomplete="off"', help: 'Código de acesso ao painel.' })}
         </div>
 
         <div style="margin-top: 24px; display: flex; justify-content: flex-end;">
-          <button type="submit" class="admin-btn admin-btn-primary" style="padding: 10px 24px;">
+          <button type="submit" class="admin-btn admin-btn-primary" style="padding: 11px 28px;">
             Salvar Alterações
           </button>
         </div>
@@ -541,132 +792,73 @@ function renderSettingsView(container) {
   `;
 
   const form = container.querySelector('#settings-form');
-  if (form) {
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const updated = {
-        announcementText: container.querySelector('#setting-announcement').value,
-        cashbackPercent: parseInt(container.querySelector('#setting-cashback').value, 10) || 3,
-        pixDiscountPercent: parseInt(container.querySelector('#setting-pix').value, 10) || 5,
-        whatsappNumber: container.querySelector('#setting-whatsapp').value,
-        supportEmail: container.querySelector('#setting-email').value,
-        storeName: container.querySelector('#setting-store-name').value,
-      };
+  if (!form) return;
 
-      db.saveSettings(updated);
-      showToast('Configurações salvas e aplicadas com sucesso!', 'success');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const val = (id) => container.querySelector(`#${id}`).value.trim();
+    const num = (id, fallback) => {
+      const n = parseInt(val(id), 10);
+      return Number.isFinite(n) ? n : fallback;
+    };
+
+    const instagram = normalizeInstagram(val('setting-instagram'));
+    if (!instagram) {
+      showToast('Informe um Instagram válido (@usuario ou link do perfil).', 'error');
+      return;
+    }
+
+    const reels = val('setting-reels')
+      .split(/\s+/)
+      .map(normalizeReelUrl)
+      .filter(Boolean);
+
+    db.saveSettings({
+      storeName: val('setting-store-name') || 'Gordinho Brindes',
+      storeSubtitle: val('setting-store-subtitle'),
+      companyLegalName: val('setting-legal-name'),
+      cnpj: val('setting-cnpj'),
+      stateRegistration: val('setting-state-registration'),
+      address: val('setting-address'),
+      whatsappNumber: val('setting-whatsapp').replace(/\D/g, ''),
+      whatsappDisplay: val('setting-whatsapp-display'),
+      supportEmail: val('setting-email'),
+      businessHours: val('setting-hours'),
+      instagramHandle: instagram.handle,
+      instagramUrl: instagram.url,
+      instagramReels: reels,
+      facebookUrl: val('setting-facebook'),
+      youtubeUrl: val('setting-youtube'),
+      tiktokUrl: val('setting-tiktok'),
+      announcementText: val('setting-announcement'),
+      announcementVisible: container.querySelector('#setting-announcement-visible').checked,
+      cashbackPercent: num('setting-cashback', 5),
+      pixDiscountPercent: num('setting-pix', 5),
+      maxInstallments: num('setting-installments', 10),
+      adminPin: val('setting-pin') || '2026',
     });
-  }
+    showToast('Configurações salvas e aplicadas à loja pública com sucesso!', 'success');
+  });
+}
+
+// Aceita "@usuario", "usuario" ou "https://www.instagram.com/usuario/"
+function normalizeInstagram(input) {
+  const match = String(input || '').trim().match(/^(?:https?:\/\/)?(?:www\.)?(?:instagram\.com\/)?@?([A-Za-z0-9._]{1,30})\/?(?:\?.*)?$/);
+  if (!match) return null;
+  const user = match[1];
+  return { handle: `@${user}`, url: `https://www.instagram.com/${user}/` };
+}
+
+// Aceita links de reel/post (com ou sem parâmetros) e devolve a URL canônica
+function normalizeReelUrl(input) {
+  const match = String(input || '').match(/instagram\.com\/(?:[A-Za-z0-9._]+\/)?(reels?|p|tv)\/([A-Za-z0-9_-]+)/);
+  if (!match) return null;
+  const kind = match[1] === 'p' || match[1] === 'tv' ? match[1] : 'reel';
+  return `https://www.instagram.com/${kind}/${match[2]}/`;
 }
 
 // ----------------------------------------------------
-// 5. DATABASE & BACKUP VIEW
-// ----------------------------------------------------
-function renderDatabaseView(container) {
-  const metrics = db.getMetrics();
-
-  container.innerHTML = `
-    <div class="admin-card" style="max-width: 800px;">
-      <div class="admin-card-header">
-        <div>
-          <h2 class="admin-card-title">Gestão do Banco de Dados & Backups</h2>
-          <p style="font-size: 12px; color: #786C65; margin: 4px 0 0 0;">O banco de dados do Coconut Ice armazena produtos, pedidos e configurações com persistência local instantânea.</p>
-        </div>
-      </div>
-
-      <div style="background: #FDFBF9; border: 1px solid #E8E2D9; border-radius: 12px; padding: 18px; margin-bottom: 24px;">
-        <h3 style="font-size: 14px; font-weight: 700; color: #27211D; margin: 0 0 10px 0;">Status do Banco de Dados</h3>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 13px;">
-          <div><strong>${metrics.totalProducts}</strong> Produtos registrados</div>
-          <div><strong>${metrics.totalOrders}</strong> Pedidos salvos</div>
-          <div><strong>7</strong> Categorias ativas</div>
-        </div>
-      </div>
-
-      <div style="display: flex; flex-direction: column; gap: 20px;">
-        <div>
-          <h4 style="font-size: 14px; font-weight: 700; margin: 0 0 6px 0;">1. Exportar Backup Completo (JSON)</h4>
-          <p style="font-size: 12px; color: #786C65; margin: 0 0 10px 0;">Baixe uma cópia integral do catálogo e pedidos para arquivamento ou migração.</p>
-          <button id="btn-export-backup" class="admin-btn admin-btn-secondary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Baixar Arquivo JSON de Backup
-          </button>
-        </div>
-
-        <hr style="border: none; border-top: 1px solid #E8E2D9;">
-
-        <div>
-          <h4 style="font-size: 14px; font-weight: 700; margin: 0 0 6px 0;">2. Importar / Restaurar Backup</h4>
-          <p style="font-size: 12px; color: #786C65; margin: 0 0 10px 0;">Selecione um arquivo de backup em JSON ou cole o conteúdo para substituir os dados atuais.</p>
-          <textarea id="import-json-text" class="admin-textarea" rows="4" placeholder="Cole o código JSON do backup aqui..."></textarea>
-          <div style="margin-top: 10px; display: flex; gap: 10px;">
-            <button id="btn-import-backup" class="admin-btn admin-btn-primary">
-              Restaurar Dados do JSON
-            </button>
-          </div>
-        </div>
-
-        <hr style="border: none; border-top: 1px solid #E8E2D9;">
-
-        <div>
-          <h4 style="font-size: 14px; font-weight: 700; color: #b91c1c; margin: 0 0 6px 0;">3. Restaurar Padrões de Fábrica</h4>
-          <p style="font-size: 12px; color: #786C65; margin: 0 0 10px 0;">Restaura o catálogo oficial da Coconut Ice com todos os produtos originais e pedidos demonstrativos.</p>
-          <button id="btn-reset-factory" class="admin-btn admin-btn-danger">
-            Restaurar Catálogo Original
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  // Attach buttons
-  const exportBtn = container.querySelector('#btn-export-backup');
-  if (exportBtn) {
-    exportBtn.addEventListener('click', () => {
-      const backupStr = db.exportBackup();
-      const blob = new Blob([backupStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `coconut-ice-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast('Backup exportado com sucesso!', 'success');
-    });
-  }
-
-  const importBtn = container.querySelector('#btn-import-backup');
-  if (importBtn) {
-    importBtn.addEventListener('click', () => {
-      const text = container.querySelector('#import-json-text').value.trim();
-      if (!text) {
-        showToast('Cole o conteúdo JSON para importar.', 'error');
-        return;
-      }
-      const res = db.importBackup(text);
-      if (res.success) {
-        showToast('Banco de dados restaurado com sucesso!', 'success');
-        renderCurrentTab();
-      } else {
-        showToast('Erro ao importar JSON: ' + res.error, 'error');
-      }
-    });
-  }
-
-  const resetBtn = container.querySelector('#btn-reset-factory');
-  if (resetBtn) {
-    resetBtn.addEventListener('click', () => {
-      if (confirm('Tem certeza de que deseja restaurar os dados originais? Todas as alterações serão redefinidas.')) {
-        db.resetToDefaults();
-        showToast('Catálogo restaurado para os dados de fábrica!', 'success');
-        renderCurrentTab();
-      }
-    });
-  }
-}
-
-// ----------------------------------------------------
-// PRODUCT MODAL (CRIAR / EDITAR)
+// 7. MODAIS (PRODUTO, PEDIDO MANUAL, CATEGORIA, DETALHES)
 // ----------------------------------------------------
 function openProductModal(productId = null) {
   editingProductId = productId;
@@ -677,14 +869,17 @@ function openProductModal(productId = null) {
     basePrice: 19.90,
     originalPrice: 39.90,
     maxDiscount: 50,
+    stockQuantity: 1000,
     description: '',
     image: 'https://lnlfnhxdwfznyzlpusqj.supabase.co/storage/v1/render/image/public/products/2aa87cd4-7101-47ce-a2da-b3ce8ea7a579/branded/6cea5fd8-5789-492c-98ac-350cdc14902a-1789132069129.png?width=500&quality=72&resize=contain',
+    hoverImage: '',
     inStock: true,
     featured: true,
+    sections: ['mais-vendidos'],
+    colors: ['#0F3822', '#FAB818', '#111111'],
   };
 
   const categories = db.getCategories();
-
   const modalContainer = document.getElementById('admin-modals-container');
   if (!modalContainer) return;
 
@@ -692,7 +887,7 @@ function openProductModal(productId = null) {
     <div class="admin-modal-backdrop" id="product-modal-backdrop">
       <div class="admin-modal" onclick="event.stopPropagation()">
         <div class="admin-modal-header">
-          <h2 style="font-size: 16px; font-weight: 700; margin: 0; color: #27211D;">
+          <h2 style="font-family: var(--admin-font-heading); font-size: 16px; font-weight: 800; margin: 0; color: #0F172A;">
             ${productId ? 'Editar Produto' : 'Cadastrar Novo Produto'}
           </h2>
           <button type="button" id="btn-close-product-modal" class="admin-btn admin-btn-secondary admin-btn-sm" style="padding: 4px 8px;">✕</button>
@@ -720,31 +915,33 @@ function openProductModal(productId = null) {
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px;">
             <div class="admin-form-group">
               <label class="admin-form-label">Preço Base (R$) *</label>
               <input type="number" step="0.01" id="prod-price" class="admin-input" required value="${product.basePrice}">
+              <div class="admin-form-help">Preço para 100 un.</div>
             </div>
 
             <div class="admin-form-group">
-              <label class="admin-form-label">Preço De (R$)</label>
+              <label class="admin-form-label">Preço Unit. Varejo (R$)</label>
               <input type="number" step="0.01" id="prod-original-price" class="admin-input" value="${product.originalPrice || ''}">
+              <div class="admin-form-help">Faixa 1 a 9 un.</div>
             </div>
 
             <div class="admin-form-group">
               <label class="admin-form-label">Desconto Máx. (%)</label>
-              <input type="number" id="prod-discount" class="admin-input" value="${product.maxDiscount || 0}">
+              <input type="number" id="prod-discount" class="admin-input" value="${product.maxDiscount || 50}">
+            </div>
+
+            <div class="admin-form-group">
+              <label class="admin-form-label">Qtd. em Estoque</label>
+              <input type="number" id="prod-stock" class="admin-input" value="${product.stockQuantity || 1000}">
             </div>
           </div>
 
           <div class="admin-form-group">
-            <label class="admin-form-label">URL da Imagem do Produto</label>
+            <label class="admin-form-label">URL da Foto Principal</label>
             <input type="url" id="prod-image" class="admin-input" value="${escapeHtml(product.image || '')}">
-            <div style="display: flex; gap: 8px; margin-top: 6px; align-items: center;">
-              <span style="font-size: 11px; color: #786C65;">Sugestões de fotos:</span>
-              <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" style="font-size: 10px; padding: 2px 6px;" onclick="document.getElementById('prod-image').value='https://lnlfnhxdwfznyzlpusqj.supabase.co/storage/v1/render/image/public/products/2aa87cd4-7101-47ce-a2da-b3ce8ea7a579/branded/6cea5fd8-5789-492c-98ac-350cdc14902a-1789132069129.png?width=500&quality=72&resize=contain'">Squeeze Inox</button>
-              <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" style="font-size: 10px; padding: 2px 6px;" onclick="document.getElementById('prod-image').value='https://lnlfnhxdwfznyzlpusqj.supabase.co/storage/v1/render/image/public/products/2aa87cd4-7101-47ce-a2da-b3ce8ea7a579/branded/2ab75319-0940-4840-80c7-450a6f03a274-1786948490046.png?width=500&quality=72&resize=contain'">Mochila USB</button>
-            </div>
           </div>
 
           <div class="admin-form-group">
@@ -752,15 +949,33 @@ function openProductModal(productId = null) {
             <textarea id="prod-desc" class="admin-textarea" rows="3">${escapeHtml(product.description || '')}</textarea>
           </div>
 
+          <div class="admin-form-group">
+            <label class="admin-form-label">Seções onde o produto é exibido na Loja:</label>
+            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                <input type="checkbox" id="sec-mais-vendidos" ${(product.sections || []).includes('mais-vendidos') ? 'checked' : ''}>
+                Mais Vendidos
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                <input type="checkbox" id="sec-destaques" ${(product.sections || []).includes('destaques') ? 'checked' : ''}>
+                Destaques
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                <input type="checkbox" id="sec-lancamentos" ${(product.sections || []).includes('lancamentos') ? 'checked' : ''}>
+                Lançamentos
+              </label>
+            </div>
+          </div>
+
           <div style="display: flex; gap: 20px; align-items: center; margin-top: 10px;">
             <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
               <input type="checkbox" id="prod-instock" ${product.inStock ? 'checked' : ''}>
-              Disponível em Estoque
+              <strong>Disponível em Estoque</strong>
             </label>
 
             <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
               <input type="checkbox" id="prod-featured" ${product.featured ? 'checked' : ''}>
-              Destaque na Página Inicial
+              <strong>Destaque na Página Inicial</strong>
             </label>
           </div>
         </form>
@@ -773,47 +988,262 @@ function openProductModal(productId = null) {
     </div>
   `;
 
-  const closeBtn = document.getElementById('btn-close-product-modal');
-  const cancelBtn = document.getElementById('btn-cancel-product-modal');
-  const saveBtn = document.getElementById('btn-save-product-modal');
-  const backdrop = document.getElementById('product-modal-backdrop');
+  const closeModal = () => { modalContainer.innerHTML = ''; };
+  document.getElementById('btn-close-product-modal')?.addEventListener('click', closeModal);
+  document.getElementById('btn-cancel-product-modal')?.addEventListener('click', closeModal);
+  document.getElementById('product-modal-backdrop')?.addEventListener('click', closeModal);
 
-  function closeModal() {
-    modalContainer.innerHTML = '';
+  document.getElementById('btn-save-product-modal')?.addEventListener('click', () => {
+    const name = document.getElementById('prod-name').value.trim();
+    if (!name) {
+      showToast('Informe o nome do produto', 'error');
+      return;
+    }
+
+    const sections = [];
+    if (document.getElementById('sec-mais-vendidos')?.checked) sections.push('mais-vendidos');
+    if (document.getElementById('sec-destaques')?.checked) sections.push('destaques');
+    if (document.getElementById('sec-lancamentos')?.checked) sections.push('lancamentos');
+
+    const productData = {
+      id: editingProductId,
+      name,
+      sku: document.getElementById('prod-sku').value.trim(),
+      category: document.getElementById('prod-category').value,
+      basePrice: parseFloat(document.getElementById('prod-price').value) || 0,
+      originalPrice: parseFloat(document.getElementById('prod-original-price').value) || 0,
+      maxDiscount: parseInt(document.getElementById('prod-discount').value, 10) || 50,
+      stockQuantity: parseInt(document.getElementById('prod-stock').value, 10) || 1000,
+      image: document.getElementById('prod-image').value.trim(),
+      description: document.getElementById('prod-desc').value.trim(),
+      sections: sections.length ? sections : ['mais-vendidos'],
+      inStock: document.getElementById('prod-instock').checked,
+      featured: document.getElementById('prod-featured').checked,
+    };
+
+    db.saveProduct(productData);
+    showToast(editingProductId ? 'Produto atualizado com sucesso!' : 'Novo produto cadastrado!', 'success');
+    closeModal();
+    renderCurrentTab();
+  });
+}
+
+function openManualOrderModal() {
+  const modalContainer = document.getElementById('admin-modals-container');
+  if (!modalContainer) return;
+
+  const products = db.getProducts();
+
+  modalContainer.innerHTML = `
+    <div class="admin-modal-backdrop" id="manual-order-backdrop">
+      <div class="admin-modal" onclick="event.stopPropagation()" style="max-width: 600px;">
+        <div class="admin-modal-header">
+          <h2 style="font-family: var(--admin-font-heading); font-size: 16px; font-weight: 800; margin: 0; color: #0F172A;">
+            Criar Novo Pedido / Orçamento Manual
+          </h2>
+          <button type="button" id="btn-close-manual-order" class="admin-btn admin-btn-secondary admin-btn-sm">✕</button>
+        </div>
+
+        <form id="manual-order-form" class="admin-modal-body">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="admin-form-group">
+              <label class="admin-form-label">Nome do Cliente *</label>
+              <input type="text" id="man-cust-name" class="admin-input" required placeholder="Ex: Roberto Mendes">
+            </div>
+            <div class="admin-form-group">
+              <label class="admin-form-label">Empresa / Razão Social</label>
+              <input type="text" id="man-cust-company" class="admin-input" placeholder="Ex: Portonave Logística">
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="admin-form-group">
+              <label class="admin-form-label">WhatsApp *</label>
+              <input type="text" id="man-cust-phone" class="admin-input" required placeholder="(47) 99999-9999">
+            </div>
+            <div class="admin-form-group">
+              <label class="admin-form-label">E-mail</label>
+              <input type="email" id="man-cust-email" class="admin-input" placeholder="contato@empresa.com.br">
+            </div>
+          </div>
+
+          <div class="admin-form-group">
+            <label class="admin-form-label">Selecione o Produto *</label>
+            <select id="man-prod-select" class="admin-select" required>
+              ${products.map(p => `
+                <option value="${p.id}" data-price="${p.basePrice}">${p.name} (R$ ${parseFloat(p.basePrice).toFixed(2).replace('.', ',')})</option>
+              `).join('')}
+            </select>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+            <div class="admin-form-group">
+              <label class="admin-form-label">Quantidade</label>
+              <input type="number" id="man-order-qty" class="admin-input" value="100" min="1">
+            </div>
+            <div class="admin-form-group">
+              <label class="admin-form-label">Preço Unit. (R$)</label>
+              <input type="number" step="0.01" id="man-order-unit" class="admin-input" value="${products[0]?.basePrice || 19.90}">
+            </div>
+            <div class="admin-form-group">
+              <label class="admin-form-label">Status Inicial</label>
+              <select id="man-order-status" class="admin-select">
+                <option value="Pendente">Pendente</option>
+                <option value="Aprovado">Aprovado</option>
+                <option value="Em Produção">Em Produção</option>
+                <option value="Concluído">Concluído</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="admin-form-group">
+            <label class="admin-form-label">Forma de Pagamento</label>
+            <select id="man-order-payment" class="admin-select">
+              <option value="Pix à vista (5% OFF)">Pix à vista (5% OFF)</option>
+              <option value="Boleto Faturado 30 dias">Boleto Faturado 30 dias</option>
+              <option value="Cartão de Crédito até 10x">Cartão de Crédito até 10x</option>
+              <option value="Transferência Bancária">Transferência Bancária</option>
+            </select>
+          </div>
+
+          <div class="admin-form-group">
+            <label class="admin-form-label">Instruções de Personalização / Observações</label>
+            <input type="text" id="man-order-notes" class="admin-input" placeholder="Ex: Gravação a laser da logomarca frontal">
+          </div>
+
+          <div style="background: #eaf5ea; border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 13px; font-weight: 700; color: #166534;">Total do Pedido:</span>
+            <span id="man-order-total-display" style="font-size: 18px; font-weight: 800; color: #166534;">R$ 0,00</span>
+          </div>
+        </form>
+
+        <div class="admin-modal-footer">
+          <button type="button" id="btn-cancel-manual-order" class="admin-btn admin-btn-secondary">Cancelar</button>
+          <button type="button" id="btn-save-manual-order" class="admin-btn admin-btn-primary">Criar Pedido</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const closeModal = () => { modalContainer.innerHTML = ''; };
+  document.getElementById('btn-close-manual-order')?.addEventListener('click', closeModal);
+  document.getElementById('btn-cancel-manual-order')?.addEventListener('click', closeModal);
+  document.getElementById('manual-order-backdrop')?.addEventListener('click', closeModal);
+
+  const prodSelect = document.getElementById('man-prod-select');
+  const qtyInput = document.getElementById('man-order-qty');
+  const unitInput = document.getElementById('man-order-unit');
+  const totalDisplay = document.getElementById('man-order-total-display');
+
+  function updateManualTotal() {
+    const qty = parseInt(qtyInput.value, 10) || 1;
+    const unit = parseFloat(unitInput.value) || 0;
+    const total = qty * unit;
+    totalDisplay.textContent = `R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
   }
 
-  if (closeBtn) closeBtn.addEventListener('click', closeModal);
-  if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
-  if (backdrop) backdrop.addEventListener('click', closeModal);
+  prodSelect.addEventListener('change', () => {
+    const selected = products.find(p => p.id === prodSelect.value);
+    if (selected) {
+      unitInput.value = db.getUnitPriceForQty(selected, parseInt(qtyInput.value, 10) || 100);
+      updateManualTotal();
+    }
+  });
 
-  if (saveBtn) {
-    saveBtn.addEventListener('click', () => {
-      const name = document.getElementById('prod-name').value.trim();
-      if (!name) {
-        showToast('Informe o nome do produto', 'error');
-        return;
-      }
+  qtyInput.addEventListener('input', () => {
+    const selected = products.find(p => p.id === prodSelect.value);
+    if (selected) {
+      unitInput.value = db.getUnitPriceForQty(selected, parseInt(qtyInput.value, 10) || 1);
+    }
+    updateManualTotal();
+  });
 
-      const productData = {
-        id: editingProductId,
+  unitInput.addEventListener('input', updateManualTotal);
+  updateManualTotal();
+
+  document.getElementById('btn-save-manual-order')?.addEventListener('click', () => {
+    const name = document.getElementById('man-cust-name').value.trim();
+    const phone = document.getElementById('man-cust-phone').value.trim();
+    if (!name || !phone) {
+      showToast('Preencha o nome e o WhatsApp do cliente.', 'error');
+      return;
+    }
+
+    const selectedProduct = products.find(p => p.id === prodSelect.value);
+    const qty = parseInt(qtyInput.value, 10) || 100;
+    const unitPrice = parseFloat(unitInput.value) || 0;
+    const total = parseFloat((qty * unitPrice).toFixed(2));
+
+    const newOrder = db.addOrder({
+      customer: {
         name,
-        sku: document.getElementById('prod-sku').value.trim(),
-        category: document.getElementById('prod-category').value,
-        basePrice: parseFloat(document.getElementById('prod-price').value) || 0,
-        originalPrice: parseFloat(document.getElementById('prod-original-price').value) || 0,
-        maxDiscount: parseInt(document.getElementById('prod-discount').value, 10) || 0,
-        image: document.getElementById('prod-image').value.trim(),
-        description: document.getElementById('prod-desc').value.trim(),
-        inStock: document.getElementById('prod-instock').checked,
-        featured: document.getElementById('prod-featured').checked,
-      };
-
-      db.saveProduct(productData);
-      showToast(editingProductId ? 'Produto atualizado com sucesso!' : 'Novo produto cadastrado!', 'success');
-      closeModal();
-      renderCurrentTab();
+        company: document.getElementById('man-cust-company').value.trim(),
+        phone,
+        email: document.getElementById('man-cust-email').value.trim(),
+      },
+      items: [
+        { productId: selectedProduct?.id || 'manual', name: selectedProduct?.name || 'Item Personalizado', quantity: qty, unitPrice, total }
+      ],
+      total,
+      paymentMethod: document.getElementById('man-order-payment').value,
+      status: document.getElementById('man-order-status').value,
+      notes: document.getElementById('man-order-notes').value.trim(),
     });
-  }
+
+    showToast(`Pedido ${newOrder.id} criado com sucesso!`, 'success');
+    closeModal();
+    renderCurrentTab();
+  });
+}
+
+function openCategoryModal(catId = null) {
+  const modalContainer = document.getElementById('admin-modals-container');
+  if (!modalContainer) return;
+
+  const categories = db.getCategories();
+  const cat = catId ? categories.find(c => c.id === catId) : { name: '' };
+
+  modalContainer.innerHTML = `
+    <div class="admin-modal-backdrop" id="category-modal-backdrop">
+      <div class="admin-modal" onclick="event.stopPropagation()" style="max-width: 440px;">
+        <div class="admin-modal-header">
+          <h2 style="font-family: var(--admin-font-heading); font-size: 16px; font-weight: 800; margin: 0; color: #0F172A;">
+            ${catId ? 'Editar Categoria' : 'Nova Categoria'}
+          </h2>
+          <button type="button" id="btn-close-cat-modal" class="admin-btn admin-btn-secondary admin-btn-sm">✕</button>
+        </div>
+
+        <form id="category-modal-form" class="admin-modal-body">
+          <div class="admin-form-group">
+            <label class="admin-form-label">Nome da Categoria *</label>
+            <input type="text" id="cat-name-input" class="admin-input" required value="${escapeHtml(cat.name)}" placeholder="Ex: Mochilas & Malas">
+          </div>
+        </form>
+
+        <div class="admin-modal-footer">
+          <button type="button" id="btn-cancel-cat-modal" class="admin-btn admin-btn-secondary">Cancelar</button>
+          <button type="button" id="btn-save-cat-modal" class="admin-btn admin-btn-primary">Salvar Categoria</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const closeModal = () => { modalContainer.innerHTML = ''; };
+  document.getElementById('btn-close-cat-modal')?.addEventListener('click', closeModal);
+  document.getElementById('btn-cancel-cat-modal')?.addEventListener('click', closeModal);
+  document.getElementById('category-modal-backdrop')?.addEventListener('click', closeModal);
+
+  document.getElementById('btn-save-cat-modal')?.addEventListener('click', () => {
+    const name = document.getElementById('cat-name-input').value.trim();
+    if (!name) {
+      showToast('Informe o nome da categoria.', 'error');
+      return;
+    }
+    db.saveCategory({ id: catId, name });
+    showToast('Categoria salva com sucesso!', 'success');
+    closeModal();
+    renderCurrentTab();
+  });
 }
 
 // ----------------------------------------------------
@@ -826,7 +1256,19 @@ window.editProduct = (id) => {
 window.deleteProduct = (id) => {
   if (confirm('Deseja realmente remover este produto do catálogo?')) {
     db.deleteProduct(id);
-    showToast('Produto excluído.', 'success');
+    showToast('Produto excluído com sucesso.', 'success');
+    renderCurrentTab();
+  }
+};
+
+window.editCategory = (id) => {
+  openCategoryModal(id);
+};
+
+window.deleteCategory = (id) => {
+  if (confirm('Deseja excluir esta categoria? Os produtos continuarão no catálogo.')) {
+    db.deleteCategory(id);
+    showToast('Categoria removida.', 'success');
     renderCurrentTab();
   }
 };
@@ -851,31 +1293,36 @@ window.viewOrderDetails = (orderId) => {
   const modalContainer = document.getElementById('admin-modals-container');
   if (!modalContainer) return;
 
+  const rawPhone = (order.customer.phone || '').replace(/\D/g, '');
+  const waUrl = rawPhone ? `https://wa.me/55${rawPhone}?text=${encodeURIComponent(`Olá ${order.customer.name}! Sou da equipe Gordinho Brindes referente ao seu pedido #${order.id} no valor de R$ ${parseFloat(order.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`)}` : '';
+
   modalContainer.innerHTML = `
     <div class="admin-modal-backdrop" id="order-modal-backdrop">
       <div class="admin-modal" onclick="event.stopPropagation()">
         <div class="admin-modal-header">
-          <h2 style="font-size: 16px; font-weight: 700; margin: 0; color: #27211D;">Detalhes do Pedido ${order.id}</h2>
+          <h2 style="font-family: var(--admin-font-heading); font-size: 16px; font-weight: 800; margin: 0; color: #0F172A;">
+            Detalhes do Pedido ${order.id}
+          </h2>
           <button type="button" id="btn-close-order-modal" class="admin-btn admin-btn-secondary admin-btn-sm">✕</button>
         </div>
 
         <div class="admin-modal-body">
-          <div style="background: #FDFBF9; border: 1px solid #E8E2D9; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+          <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 13px;">
               <div>
-                <div style="color: #786C65; font-size: 11px;">CLIENTE / EMPRESA</div>
-                <strong style="color: #27211D;">${order.customer.name}</strong>
-                <div>${order.customer.company || 'Pessoa Física'}</div>
+                <div style="color: #64748B; font-size: 11px; font-weight: 700; text-transform: uppercase;">Cliente / Empresa</div>
+                <strong style="color: #0F172A; font-size: 14px;">${escapeHtml(order.customer.name)}</strong>
+                <div style="color: #16A34A; font-weight: 700;">${escapeHtml(order.customer.company || 'Pessoa Física')}</div>
               </div>
               <div>
-                <div style="color: #786C65; font-size: 11px;">CONTATO</div>
-                <div>${order.customer.phone || '-'}</div>
-                <div>${order.customer.email || '-'}</div>
+                <div style="color: #64748B; font-size: 11px; font-weight: 700; text-transform: uppercase;">Contato</div>
+                <div>${escapeHtml(order.customer.phone || '-')}</div>
+                <div style="color: #64748B; font-size: 11px;">${escapeHtml(order.customer.email || '-')}</div>
               </div>
             </div>
           </div>
 
-          <h3 style="font-size: 14px; font-weight: 700; margin: 0 0 10px 0;">Itens Solicitados</h3>
+          <h3 style="font-family: var(--admin-font-heading); font-size: 14px; font-weight: 800; margin: 0 0 10px 0;">Itens Solicitados</h3>
           <table class="admin-table" style="margin-bottom: 20px;">
             <thead>
               <tr>
@@ -888,27 +1335,41 @@ window.viewOrderDetails = (orderId) => {
             <tbody>
               ${order.items.map(it => `
                 <tr>
-                  <td><strong>${it.name}</strong></td>
+                  <td><strong>${escapeHtml(it.name)}</strong> ${it.color ? `<span style="font-size: 11px; color: #64748B;">(${it.color})</span>` : ''}</td>
                   <td>${it.quantity} un.</td>
                   <td>R$ ${parseFloat(it.unitPrice).toFixed(2).replace('.', ',')}</td>
-                  <td><strong>R$ ${(it.quantity * it.unitPrice).toFixed(2).replace('.', ',')}</strong></td>
+                  <td><strong style="color: #16A34A;">R$ ${(it.quantity * it.unitPrice).toFixed(2).replace('.', ',')}</strong></td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
 
-          <div style="text-align: right; font-size: 16px; font-weight: 700; color: #3E7921; margin-bottom: 16px;">
-            Total do Pedido: R$ ${parseFloat(order.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          <div style="display: flex; justify-content: space-between; align-items: center; background: #F8FAFC; padding: 12px 16px; border-radius: 10px; border: 1px solid #E2E8F0; margin-bottom: 16px;">
+            <div>
+              <div style="font-size: 11px; color: #64748B; font-weight: 700;">FORMA DE PAGAMENTO</div>
+              <div style="font-size: 13px; font-weight: 700; color: #0F172A;">${escapeHtml(order.paymentMethod || 'Pix')}</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 11px; color: #64748B; font-weight: 700;">TOTAL DO PEDIDO</div>
+              <div style="font-size: 18px; font-weight: 800; color: #16A34A;">
+                R$ ${parseFloat(order.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </div>
+            </div>
           </div>
 
           ${order.notes ? `
-            <div style="background: #FFF9E6; border: 1px solid #FDE68A; border-radius: 8px; padding: 12px; font-size: 12px; color: #92400E;">
-              <strong>Observação da Personalização:</strong> ${order.notes}
+            <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 12px; font-size: 12px; color: #92400E;">
+              <strong>Observação da Personalização:</strong> ${escapeHtml(order.notes)}
             </div>
           ` : ''}
         </div>
 
         <div class="admin-modal-footer">
+          ${waUrl ? `
+            <a href="${waUrl}" target="_blank" rel="noopener" class="admin-btn" style="background: #25D366; color: #FFFFFF;">
+              Conversar no WhatsApp
+            </a>
+          ` : ''}
           <button type="button" id="btn-close-order-modal-2" class="admin-btn admin-btn-secondary">Fechar</button>
         </div>
       </div>
@@ -920,37 +1381,6 @@ window.viewOrderDetails = (orderId) => {
   document.getElementById('btn-close-order-modal-2')?.addEventListener('click', closeFn);
   document.getElementById('order-modal-backdrop')?.addEventListener('click', closeFn);
 };
-
-function simulateTestOrder() {
-  const companies = ['Itaú Unibanco', 'Nubank', 'QuintoAndar', 'XP Investimentos', 'Ambev'];
-  const names = ['Guilherme Prado', 'Beatriz Costa', 'Fernanda Lima', 'Mateus Souza', 'Julia Alencar'];
-  
-  const randomCompany = companies[Math.floor(Math.random() * companies.length)];
-  const randomName = names[Math.floor(Math.random() * names.length)];
-
-  const products = db.getProducts();
-  const sampleProd = products[Math.floor(Math.random() * products.length)] || products[0];
-  const qty = [50, 100, 200, 500][Math.floor(Math.random() * 4)];
-  const total = qty * sampleProd.basePrice;
-
-  const newOrder = db.addOrder({
-    customer: {
-      name: randomName,
-      company: randomCompany,
-      email: `${randomName.toLowerCase().replace(' ', '.')}@empresa.com.br`,
-      phone: '(11) 9' + Math.floor(10000000 + Math.random() * 90000000),
-    },
-    items: [
-      { productId: sampleProd.id, name: sampleProd.name, quantity: qty, unitPrice: sampleProd.basePrice, total }
-    ],
-    total,
-    paymentMethod: 'Pix à vista (5% OFF)',
-    notes: 'Gravação da logomarca corporativa colorida em serigrafia.',
-  });
-
-  showToast(`Novo pedido ${newOrder.id} simulado com sucesso!`, 'success');
-  renderCurrentTab();
-}
 
 function getStatusBadgeClass(status) {
   switch (status) {
@@ -983,7 +1413,7 @@ function showToast(message, type = 'info') {
 }
 
 function escapeHtml(str) {
-  if (!str) return '';
+  if (str === null || str === undefined) return '';
   return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

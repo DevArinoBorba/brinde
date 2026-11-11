@@ -1,6 +1,6 @@
-# Coconut Ice - Brindes Personalizados
+# Gordinho Brindes - Brindes Personalizados
 
-E-commerce moderno e responsivo para brindes corporativos e produtos personalizados, desenvolvido com Vite, JavaScript e Tailwind CSS. Inclui vitrine de produtos completa, sistema de orçamentos e painel administrativo interativo com persistência de dados.
+E-commerce da Gordinho Brindes (Grupo Gordinho, Itajaí/SC) para brindes corporativos e produtos personalizados, desenvolvido com Vite, JavaScript e Tailwind CSS. Inclui vitrine de produtos completa, sistema de orçamentos e painel administrativo interativo com persistência de dados.
 
 ---
 
