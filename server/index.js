@@ -7,7 +7,8 @@ import { ensureAdminCredential, login, changePin, requireAdmin } from './auth.js
 import { unitPriceForQty } from '../src/pricing.js';
 
 const PORT = Number(process.env.PORT) || 3000;
-const HOST = process.env.HOST || '::'; // IPv4 + IPv6 (o health check do Coolify usa localhost, que no Alpine resolve para ::1)
+// LISTEN_HOST (e não HOST): o Coolify injeta HOST=0.0.0.0, e o health check dele usa localhost -> ::1 no Alpine
+const HOST = process.env.LISTEN_HOST || '::';
 const DIST_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 
 const db = await store.openDatabase();
