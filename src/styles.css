@@ -761,3 +761,10 @@ span.cta-whatsapp {
   justify-content: center;
   box-shadow: 0 0 0 2px #FFFFFF;
 }
+span.cta-whatsapp {
+  gap: 8px;
+  letter-spacing: 0.18em;
+}
+.whatsapp-icon {
+  flex-shrink: 0;
+}

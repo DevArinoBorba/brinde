@@ -1,5 +1,6 @@
 // Gordinho Brindes — Admin Management Panel Controller
 import { db } from './db.js';
+import { whatsappIcon } from './whatsapp-icon.js';
 
 let currentTab = 'dashboard';
 let editingProductId = null;
@@ -647,8 +648,8 @@ function renderOrderRows(orders) {
               Detalhes
             </button>
             ${waUrl ? `
-              <a href="${waUrl}" target="_blank" rel="noopener" class="admin-btn admin-btn-sm" style="background: #25D366; color: #FFFFFF;" title="Conversar no WhatsApp">
-                WA
+              <a href="${waUrl}" target="_blank" rel="noopener" class="admin-btn admin-btn-sm" style="background: #25D366; color: #FFFFFF;" title="Conversar no WhatsApp" aria-label="Conversar no WhatsApp">
+                ${whatsappIcon(15)}
               </a>
             ` : ''}
             <button class="admin-btn admin-btn-danger admin-btn-sm" onclick="window.deleteOrder('${o.id}')" title="Excluir">
@@ -1574,7 +1575,7 @@ window.viewOrderDetails = (orderId) => {
         <div class="admin-modal-footer">
           ${waUrl ? `
             <a href="${waUrl}" target="_blank" rel="noopener" class="admin-btn" style="background: #25D366; color: #FFFFFF;">
-              Conversar no WhatsApp
+              ${whatsappIcon(16)}<span>Conversar no WhatsApp</span>
             </a>
           ` : ''}
           <button type="button" id="btn-close-order-modal-2" class="admin-btn admin-btn-secondary">Fechar</button>

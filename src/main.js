@@ -1,5 +1,6 @@
 import { db } from './db.js';
 import { applySettings, renderProducts, renderInstagramReels, setupInstagramReelsNav, whatsappUrl, escapeHtml } from './store-sync.js';
+import { whatsappIcon } from './whatsapp-icon.js';
 
 // ==========================================================================
 // GORDINHO BRINDES — MAIN STOREFRONT CONTROLLER
@@ -520,7 +521,7 @@ function openOrderModal(product) {
           </span>
           <h2 style="font-size: 17px; font-weight: 700; margin: 3px 0 0 0; color: #FFFFFF;">${product.name}</h2>
         </div>
-        <button type="button" id="btn-close-store-modal" class="admin-btn admin-btn-secondary admin-btn-sm" style="color: #fff; border-color: rgba(255,255,255,0.3);">✕</button>
+        <button type="button" id="btn-close-store-modal" class="admin-btn admin-btn-secondary admin-btn-sm" aria-label="Fechar" style="color: #fff; background: transparent; border-color: rgba(255,255,255,0.3);">✕</button>
       </div>
 
       <form id="store-order-form" class="admin-modal-body" style="padding: 20px;">
@@ -616,7 +617,7 @@ function openOrderModal(product) {
         </button>
         <div style="display: flex; gap: 8px;">
           <button type="button" id="btn-submit-whatsapp-order" class="admin-btn" style="background: #25D366; color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px;">
-            <span>💬 Orçar no WhatsApp</span>
+            ${whatsappIcon(16)}<span>Orçar no WhatsApp</span>
           </button>
           <button type="button" id="btn-submit-store-order" class="admin-btn admin-btn-primary" style="font-size: 13px; font-weight: 700;">
             Confirmar Proposta
@@ -762,8 +763,8 @@ ${valueLine}
           <button type="button" class="admin-btn admin-btn-secondary" onclick="document.getElementById('store-order-modal-backdrop').remove()">
             Continuar no Site
           </button>
-          <a href="${whatsappUrl(`Olá, acabei de solicitar a proposta ${newOrder.id} no site da ${db.getSettings().storeName}!`)}" target="_blank" class="admin-btn" style="background: #25D366; color: #fff; font-weight: 700;">
-            💬 Abrir no WhatsApp
+          <a href="${whatsappUrl(`Olá, acabei de solicitar a proposta ${newOrder.id} no site da ${db.getSettings().storeName}!`)}" target="_blank" class="admin-btn" style="background: #25D366; color: #fff; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+            ${whatsappIcon(16)}<span>Abrir no WhatsApp</span>
           </a>
         </div>
       </div>
@@ -839,7 +840,7 @@ function setupCartDrawer() {
 
           <div class="space-y-2">
             <button id="btn-cart-whatsapp-checkout" class="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.669-.699c.969.54 1.771.82 2.791.82 3.181 0 5.768-2.587 5.768-5.766.001-3.182-2.585-5.806-5.768-5.806zm7.251 5.766c-.001 4.004-3.257 7.258-7.251 7.258-1.22 0-2.385-.306-3.411-.854l-3.769.988 1.006-3.676c-.633-1.076-.98-2.327-.98-3.716 0-4.004 3.256-7.259 7.251-7.259 3.996 0 7.253 3.255 7.253 7.259z"/></svg>
+              ${whatsappIcon(18)}
               <span>Enviar orçamento no WhatsApp</span>
             </button>
             <div class="flex gap-2">
@@ -1285,7 +1286,7 @@ function openInstitutionalModal({ title, content, isTracker }) {
             <span style="font-size: 11px; font-weight: 800; color: #FAB818; text-transform: uppercase;">Central do Cliente</span>
             <h2 style="font-size: 16px; font-weight: 700; margin: 2px 0 0 0; color: #fff;">${title}</h2>
           </div>
-          <button type="button" id="btn-close-inst-modal" class="admin-btn admin-btn-secondary admin-btn-sm" style="color: #fff;">✕</button>
+          <button type="button" id="btn-close-inst-modal" class="admin-btn admin-btn-secondary admin-btn-sm" aria-label="Fechar" style="color: #fff; background: transparent; border-color: rgba(255,255,255,0.3);">✕</button>
         </div>
         <div class="admin-modal-body" style="padding: 20px;">
           <p style="font-size: 13px; color: #64748B; margin-bottom: 14px;">
@@ -1351,7 +1352,7 @@ function openInstitutionalModal({ title, content, isTracker }) {
           <span style="font-size: 11px; font-weight: 800; color: #FAB818; text-transform: uppercase;">Institucional Gordinho</span>
           <h2 style="font-size: 16px; font-weight: 700; margin: 2px 0 0 0; color: #fff;">${title}</h2>
         </div>
-        <button type="button" id="btn-close-inst-modal" class="admin-btn admin-btn-secondary admin-btn-sm" style="color: #fff;">✕</button>
+        <button type="button" id="btn-close-inst-modal" class="admin-btn admin-btn-secondary admin-btn-sm" aria-label="Fechar" style="color: #fff; background: transparent; border-color: rgba(255,255,255,0.3);">✕</button>
       </div>
       <div class="admin-modal-body" style="padding: 24px; font-size: 13.5px; line-height: 1.6; color: #334155;">
         ${content}

@@ -1,6 +1,7 @@
 // Gordinho Brindes — aplica no storefront tudo o que é gerenciado pelo Painel Admin
 // (configurações da loja, produtos dos carrosséis e reels do Instagram).
 import { db } from './db.js';
+import { whatsappIcon } from './whatsapp-icon.js';
 
 // ------------------------------------------------------------------
 // FORMATADORES
@@ -228,7 +229,8 @@ function hydrateCard(slide, product) {
   const ctaEl = [...slide.querySelectorAll('span')].find((s) => s.dataset.ctaLabel || /^(Ver mais|Consultar no WhatsApp)$/.test(s.textContent.trim()));
   if (ctaEl) {
     ctaEl.dataset.ctaLabel = 'true';
-    ctaEl.textContent = onRequest ? 'Consultar no WhatsApp' : 'Ver mais';
+    if (onRequest) ctaEl.innerHTML = `${whatsappIcon(15)}<span>Consultar no WhatsApp</span>`;
+    else ctaEl.textContent = 'Ver mais';
     ctaEl.classList.toggle('cta-whatsapp', onRequest);
   }
 
