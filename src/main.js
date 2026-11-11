@@ -1,18 +1,19 @@
 import { db } from './db.js';
-import { applySettings, renderProducts, renderInstagramReels, setupInstagramReelsNav, whatsappUrl } from './store-sync.js';
+import { applySettings, renderProducts, renderInstagramReels, setupInstagramReelsNav, whatsappUrl, escapeHtml } from './store-sync.js';
 
 // ==========================================================================
 // GORDINHO BRINDES — MAIN STOREFRONT CONTROLLER
 // ==========================================================================
 
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('Gordinho Brindes storefront initialized successfully');
+document.addEventListener('DOMContentLoaded', async () => {
+  // Catálogo e configurações vêm do banco; sem API, segue com o catálogo padrão
+  await db.ready;
 
   // 1. Initial Data Sync & Subscription (antes dos binds, para os cards novos receberem eventos)
   syncStorefrontWithDB();
   db.subscribe(({ key }) => {
     // Produto novo cadastrado no admin precisa dos binds de evento da carga da página
-    if (key && key.includes('products') && renderProducts({ allowCreate: false })) {
+    if ((key === 'store' || key === 'products') && renderProducts({ allowCreate: false })) {
       window.location.reload();
       return;
     }
@@ -693,7 +694,7 @@ function openOrderModal(product) {
   });
 
   // Action: Confirm Store Order (DB Persistence)
-  document.getElementById('btn-submit-store-order')?.addEventListener('click', () => {
+  document.getElementById('btn-submit-store-order')?.addEventListener('click', async (e) => {
     const name = document.getElementById('order-cust-name')?.value.trim();
     const phone = document.getElementById('order-cust-phone')?.value.trim();
     const email = document.getElementById('order-cust-email')?.value.trim();
@@ -707,7 +708,11 @@ function openOrderModal(product) {
 
     const total = parseFloat((selectedQty * unitPrice).toFixed(2));
 
-    const newOrder = db.addOrder({
+    const submitBtn = e.currentTarget;
+    submitBtn.disabled = true;
+    let newOrder;
+    try {
+      newOrder = await db.addOrder({
       customer: { name, company, phone, email },
       items: [
         {
@@ -724,6 +729,11 @@ function openOrderModal(product) {
       paymentMethod: `Pix à vista (${db.getSettings().pixDiscountPercent}% OFF) ou Faturado`,
       notes: notes || 'Gravação personalizada com arte enviada pelo cliente.',
     });
+    } catch (err) {
+      submitBtn.disabled = false;
+      showToast(`Não foi possível registrar a proposta: ${err.message} Envie pelo WhatsApp.`, 'error');
+      return;
+    }
 
     modalBackdrop.innerHTML = `
       <div class="admin-modal" onclick="event.stopPropagation()" style="max-width: 480px; text-align: center; padding: 36px 24px;">
@@ -732,7 +742,7 @@ function openOrderModal(product) {
         </div>
         <h2 style="font-size: 21px; font-weight: 800; color: #06180E; margin: 0 0 8px 0;">Proposta #${newOrder.id} Registrada!</h2>
         <p style="font-size: 13.5px; color: #64748B; margin: 0 0 20px 0; line-height: 1.5;">
-          Sua solicitação de orçamento foi gravada com sucesso. Nossa equipe de consultores entrará em contato pelo WhatsApp <strong>${phone}</strong> em instantes!
+          Sua solicitação de orçamento foi gravada com sucesso. Nossa equipe de consultores entrará em contato pelo WhatsApp <strong>${escapeHtml(phone)}</strong> em instantes!
         </p>
 
         <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
@@ -852,7 +862,7 @@ function setupCartDrawer() {
       const code = input ? input.value.trim().toUpperCase() : '';
       if (!code) return;
 
-      const calc = db.getCartTotal(code);
+      const calc = db.getCartTotals(code);
       if (calc.appliedCoupon) {
         appliedCouponCode = code;
         if (msg) {
@@ -872,15 +882,15 @@ function setupCartDrawer() {
     });
 
     // WhatsApp Checkout handler
-    document.getElementById('btn-cart-whatsapp-checkout')?.addEventListener('click', () => {
+    document.getElementById('btn-cart-whatsapp-checkout')?.addEventListener('click', async () => {
       const cart = db.getCart();
       if (cart.length === 0) {
         alert('Sua sacola está vazia.');
         return;
       }
-      const calc = db.getCartTotal(appliedCouponCode);
+      const calc = db.getCartTotals(appliedCouponCode);
       let itemsText = cart.map((item, idx) => 
-        `${idx + 1}. *${item.name}* (SKU: ${item.sku || 'N/A'})\n   - Qtd: ${item.quantity} un. | Cor: ${item.options?.selectedColor || 'Padrão'}\n   - Valor: R$ ${item.total.toFixed(2).replace('.', ',')} (R$ ${item.unitPrice.toFixed(2).replace('.', ',')}/un.)`
+        `${idx + 1}. *${item.name}* (SKU: ${item.sku || 'N/A'})\n   - Qtd: ${item.quantity} un. | Cor: ${item.color || 'Padrão'}\n   - Valor: R$ ${item.total.toFixed(2).replace('.', ',')} (R$ ${item.unitPrice.toFixed(2).replace('.', ',')}/un.)`
       ).join('\n\n');
 
       const message = `Olá, equipe Gordinho Brindes! Gostaria de formalizar uma proposta comercial com os seguintes itens da minha sacola:
@@ -893,18 +903,32 @@ ${calc.discountAmount > 0 ? `*Desconto (${calc.discountPercent}%):* -R$ ${calc.d
 
 Aguardo retorno com o mockup digital e dados para faturamento!`;
 
+      // Abre o WhatsApp já no clique (bloqueadores de pop-up barram janelas abertas depois de um await)
+      const waWindow = window.open('about:blank', '_blank');
+
       // Save order to DB
-      const order = db.addOrder({
-        customer: { name: 'Cliente WhatsApp', company: '', phone: '', email: '' },
-        items: cart,
-        total: calc.total,
+      const profile = db.getCustomerProfile();
+      let order = null;
+      try {
+        order = await db.addOrder({
+        customer: { name: profile.name || 'Cliente WhatsApp', company: profile.company || '', phone: profile.phone || '', email: profile.email || '' },
+        items: cart.map(({ productId, quantity, color, notes }) => ({ productId, quantity, color, notes })),
+        couponCode: appliedCouponCode,
         paymentMethod: `Pix à vista (${db.getSettings().pixDiscountPercent}% OFF) ou Boleto Faturado`,
         notes: 'Pedido gerado via Sacola de Orçamentos do Storefront.',
       });
+      } catch (err) {
+        // O orçamento segue pelo WhatsApp mesmo se o registro no banco falhar
+        console.error('[pedido] não registrado:', err);
+      }
 
-      window.open(whatsappUrl(message), '_blank');
+      const finalMessage = order ? `${message}
+
+*Proposta:* #${order.id}` : message;
+      if (waWindow) waWindow.location.href = whatsappUrl(finalMessage);
+      else window.open(whatsappUrl(finalMessage), '_blank');
       closeCartDrawer();
-      showToast(`Proposta #${order.id} gerada! Abrindo WhatsApp...`, 'success');
+      showToast(order ? `Proposta #${order.id} gerada! Abrindo WhatsApp...` : 'Abrindo WhatsApp...', 'success');
     });
   }
 
@@ -934,7 +958,7 @@ function renderCartDrawer(couponCode = '') {
   if (!container) return;
 
   const cart = db.getCart();
-  const calc = db.getCartTotal(couponCode);
+  const calc = db.getCartTotals(couponCode);
 
   // Update summary totals
   const subtotalEl = document.getElementById('cart-subtotal-val');
@@ -982,7 +1006,7 @@ function renderCartDrawer(couponCode = '') {
           <div class="flex-1 min-w-0">
             <h4 class="font-bold text-xs text-[#06180E] truncate">${item.name}</h4>
             <div class="text-[11px] text-gray-500 mt-0.5">
-              Cor: <strong class="text-gray-700">${item.options?.selectedColor || 'Padrão'}</strong>
+              Cor: <strong class="text-gray-700">${item.color || 'Padrão'}</strong>
             </div>
             <div class="text-xs font-bold text-emerald-600 mt-1">
               R$ ${item.unitPrice.toFixed(2).replace('.', ',')} / un.
@@ -1249,32 +1273,37 @@ function openInstitutionalModal({ title, content, isTracker }) {
     document.getElementById('btn-close-inst-modal')?.addEventListener('click', () => modalBackdrop.classList.add('hidden'));
     modalBackdrop.addEventListener('click', () => modalBackdrop.classList.add('hidden'));
 
-    document.getElementById('btn-search-order')?.addEventListener('click', () => {
+    document.getElementById('btn-search-order')?.addEventListener('click', async () => {
       const q = document.getElementById('track-order-query')?.value.trim();
       const resContainer = document.getElementById('track-results-container');
       if (!q || !resContainer) return;
 
-      const direct = db.getOrderById(q);
-      const matches = direct ? [direct] : db.searchOrdersByCustomer(q);
+      let matches;
+      try {
+        matches = await db.trackOrders(q);
+      } catch (err) {
+        resContainer.innerHTML = `<div style="background: #FEF2F2; border: 1px solid #FECACA; border-radius: 10px; padding: 14px; text-align: center; color: #991B1B; font-size: 13px;">${escapeHtml(err.message)}</div>`;
+        return;
+      }
 
       if (matches.length === 0) {
         resContainer.innerHTML = `
           <div style="background: #FEF2F2; border: 1px solid #FECACA; border-radius: 10px; padding: 14px; text-align: center; color: #991B1B; font-size: 13px;">
-            Nenhum pedido encontrado com "${q}". Verifique o número digitado ou fale diretamente com nosso time no WhatsApp.
+            Nenhum pedido encontrado com "${escapeHtml(q)}". Informe o número do pedido ou o WhatsApp completo com DDD, ou fale com nosso time no WhatsApp.
           </div>
         `;
       } else {
         resContainer.innerHTML = matches.map(o => `
           <div style="background: #F8FAFC; border: 1.5px solid #E2E8F0; border-radius: 10px; padding: 14px; margin-bottom: 10px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <span style="font-weight: 800; color: #06180E; font-size: 14px;">#${o.id}</span>
+              <span style="font-weight: 800; color: #06180E; font-size: 14px;">#${escapeHtml(o.id)}</span>
               <span class="admin-status-badge ${o.status === 'Concluído' ? 'admin-status-completed' : o.status === 'Em Produção' ? 'admin-status-in-production' : 'admin-status-pending'}">
-                ${o.status}
+                ${escapeHtml(o.status)}
               </span>
             </div>
-            <div style="font-size: 12px; color: #64748B;">Data: ${o.date || o.createdAt}</div>
+            <div style="font-size: 12px; color: #64748B;">Data: ${escapeHtml(o.date)}</div>
             <div style="font-size: 13px; font-weight: 700; color: #06180E; margin-top: 4px;">Total: R$ ${parseFloat(o.total).toFixed(2).replace('.', ',')}</div>
-            <div style="font-size: 12px; color: #64748B; margin-top: 4px;">Cliente: ${o.customer?.name || 'Cliente'} (${o.customer?.company || 'Pessoa Física'})</div>
+            <div style="font-size: 12px; color: #64748B; margin-top: 4px;">${o.itemCount} item(ns)${o.customerFirstName ? ` · Cliente: ${escapeHtml(o.customerFirstName)}` : ''}</div>
           </div>
         `).join('');
       }

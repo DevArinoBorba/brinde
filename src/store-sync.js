@@ -5,6 +5,15 @@ import { db } from './db.js';
 // ------------------------------------------------------------------
 // FORMATADORES
 // ------------------------------------------------------------------
+export function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function formatBRL(value) {
   const n = Number(value) || 0;
   return `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

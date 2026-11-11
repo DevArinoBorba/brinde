@@ -3,10 +3,27 @@ import { db } from './db.js';
 
 let currentTab = 'dashboard';
 let editingProductId = null;
+let subscribed = false;
 
-export function initAdmin(containerId = 'admin-app-root') {
+export async function initAdmin(containerId = 'admin-app-root') {
   const container = document.getElementById(containerId);
   if (!container) return;
+
+  await db.ready;
+
+  if (!subscribed) {
+    subscribed = true;
+    // Subscribe to DB updates (uma vez só, mesmo após sair e entrar de novo)
+    db.subscribe(() => {
+      if (!db.isAuthenticated()) {
+        // Sessão expirou ou foi encerrada: volta para a tela de PIN
+        if (!container.querySelector('#admin-auth-form')) renderAuthScreen(container);
+        return;
+      }
+      renderCurrentTab();
+    });
+    db.onError((message) => showToast(message, 'error'));
+  }
 
   if (!db.isAuthenticated()) {
     renderAuthScreen(container);
@@ -14,11 +31,6 @@ export function initAdmin(containerId = 'admin-app-root') {
   }
 
   renderAdmin(container);
-
-  // Subscribe to DB updates
-  db.subscribe(({ key }) => {
-    renderCurrentTab();
-  });
 }
 
 // ----------------------------------------------------
@@ -57,10 +69,13 @@ function renderAuthScreen(container) {
   const pinInput = container.querySelector('#admin-auth-pin');
   const errorMsg = container.querySelector('#admin-auth-error');
 
-  form.addEventListener('submit', (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const pin = pinInput.value.trim();
-    const res = db.login(pin);
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    const res = await db.login(pin);
+    submitBtn.disabled = false;
     if (res.success) {
       renderAdmin(container);
     } else {
@@ -209,7 +224,7 @@ function renderAdmin(container) {
   container.querySelector('#btn-admin-logout')?.addEventListener('click', () => {
     if (confirm('Deseja encerrar a sessão do painel?')) {
       db.logout();
-      initAdmin(container.id);
+      renderAuthScreen(container);
     }
   });
 
@@ -779,7 +794,7 @@ function renderSettingsView(container) {
           ${field('setting-installments', 'Parcelas sem juros (máx.)', settings.maxInstallments, { type: 'number', attrs: 'min="1" max="24"' })}
 
           ${sectionTitle('Segurança')}
-          ${field('setting-pin', 'PIN do Painel Admin', settings.adminPin, { attrs: 'maxlength="12" autocomplete="off"', help: 'Código de acesso ao painel.' })}
+          ${field('setting-pin', 'Novo PIN do Painel Admin', '', { type: 'password', attrs: 'maxlength="64" autocomplete="new-password" placeholder="Deixe vazio para manter o atual"', help: 'Mínimo de 4 caracteres. Ao trocar, outras sessões abertas do painel são encerradas.' })}
         </div>
 
         <div style="margin-top: 24px; display: flex; justify-content: flex-end;">
@@ -794,7 +809,7 @@ function renderSettingsView(container) {
   const form = container.querySelector('#settings-form');
   if (!form) return;
 
-  form.addEventListener('submit', (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const val = (id) => container.querySelector(`#${id}`).value.trim();
     const num = (id, fallback) => {
@@ -835,8 +850,21 @@ function renderSettingsView(container) {
       cashbackPercent: num('setting-cashback', 5),
       pixDiscountPercent: num('setting-pix', 5),
       maxInstallments: num('setting-installments', 10),
-      adminPin: val('setting-pin') || '2026',
     });
+
+    const newPin = val('setting-pin');
+    if (newPin) {
+      if (newPin.length < 4) {
+        showToast('O PIN precisa ter pelo menos 4 caracteres.', 'error');
+        return;
+      }
+      try {
+        await db.changePin(newPin);
+        showToast('PIN do painel alterado.', 'success');
+      } catch (err) {
+        showToast(`Não foi possível trocar o PIN: ${err.message}`, 'error');
+      }
+    }
     showToast('Configurações salvas e aplicadas à loja pública com sucesso!', 'success');
   });
 }
@@ -1161,7 +1189,7 @@ function openManualOrderModal() {
   unitInput.addEventListener('input', updateManualTotal);
   updateManualTotal();
 
-  document.getElementById('btn-save-manual-order')?.addEventListener('click', () => {
+  document.getElementById('btn-save-manual-order')?.addEventListener('click', async (e) => {
     const name = document.getElementById('man-cust-name').value.trim();
     const phone = document.getElementById('man-cust-phone').value.trim();
     if (!name || !phone) {
@@ -1174,7 +1202,11 @@ function openManualOrderModal() {
     const unitPrice = parseFloat(unitInput.value) || 0;
     const total = parseFloat((qty * unitPrice).toFixed(2));
 
-    const newOrder = db.addOrder({
+    const saveBtn = e.currentTarget;
+    saveBtn.disabled = true;
+    let newOrder;
+    try {
+    newOrder = await db.addOrder({
       customer: {
         name,
         company: document.getElementById('man-cust-company').value.trim(),
@@ -1189,6 +1221,11 @@ function openManualOrderModal() {
       status: document.getElementById('man-order-status').value,
       notes: document.getElementById('man-order-notes').value.trim(),
     });
+    } catch (err) {
+      saveBtn.disabled = false;
+      showToast(`Não foi possível criar o pedido: ${err.message}`, 'error');
+      return;
+    }
 
     showToast(`Pedido ${newOrder.id} criado com sucesso!`, 'success');
     closeModal();
@@ -1335,7 +1372,7 @@ window.viewOrderDetails = (orderId) => {
             <tbody>
               ${order.items.map(it => `
                 <tr>
-                  <td><strong>${escapeHtml(it.name)}</strong> ${it.color ? `<span style="font-size: 11px; color: #64748B;">(${it.color})</span>` : ''}</td>
+                  <td><strong>${escapeHtml(it.name)}</strong> ${it.color ? `<span style="font-size: 11px; color: #64748B;">(${escapeHtml(it.color)})</span>` : ''}</td>
                   <td>${it.quantity} un.</td>
                   <td>R$ ${parseFloat(it.unitPrice).toFixed(2).replace('.', ',')}</td>
                   <td><strong style="color: #16A34A;">R$ ${(it.quantity * it.unitPrice).toFixed(2).replace('.', ',')}</strong></td>
