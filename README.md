@@ -7,12 +7,11 @@ E-commerce da Gordinho Brindes (Grupo Gordinho, Itajaí/SC) para brindes corpora
 ## 🚀 Funcionalidades
 
 - **Vitrine Interativa**: Catálogo completo com visualização de produtos, variações, precificação dinâmica por quantidade e busca em tempo real.
-- **Painel Administrativo (`/admin.html`)**:
+- **Painel Administrativo (`/admin`)**:
   - Gestão de catálogo de produtos (cadastro, edição, remoção e preços).
   - Gerenciamento de pedidos e orçamentos em tempo real.
-  - Configurações da loja (faixa de anúncios do topo, cashback promocional, etc.).
-  - Ferramenta de exportação e backup de dados.
-- **Persistência Local**: Banco de dados mock reativo (`db.js`) sincronizado com o storefront em tempo real.
+  - Configurações da loja aplicadas em todo o site (contatos, redes sociais, reels do Instagram, promoções).
+- **Banco de Dados**: PostgreSQL com API Node/Express (`server/`); o painel grava no banco e a loja lê de lá.
 - **Design Responsivo**: Adaptado para desktop, tablet e mobile com menu lateral e popups integrados.
 
 ---
@@ -39,20 +38,29 @@ cd brinde
 npm install
 ```
 
-3. Inicie o servidor de desenvolvimento:
+3. Inicie a API. Sem `DATABASE_URL` ela usa o PGlite (Postgres embutido em `./.data/pglite`):
+```bash
+ADMIN_PIN=1234 SESSION_SECRET=dev npm run dev:api
+```
+
+4. Em outro terminal, inicie o Vite (o proxy encaminha `/api` para a porta `API_PORT`, padrão 3000):
 ```bash
 npm run dev
 ```
 
-4. Para gerar a build de produção:
+5. Build e servidor de produção:
 ```bash
 npm run build
+npm start
 ```
 
-5. Para pré-visualizar a build:
-```bash
-npm run preview
-```
+As variáveis de ambiente estão documentadas em `.env.example`. O `ADMIN_PIN` só é usado na primeira execução; depois o PIN é trocado pelo próprio painel.
+
+## 🚀 Deploy (Coolify)
+
+- Aplicação `gordinho-brindes` (Dockerfile, porta 3000, health check `/api/health`) em https://brindes.oriumdigital.tech
+- Banco PostgreSQL `gordinho-brindes-db` no mesmo projeto, só na rede interna, com backup diário às 03h
+- O deploy não é automático: depois do push na `main`, use "Redeploy" no Coolify
 
 ---
 
