@@ -1,4 +1,5 @@
-// Gordinho Brindes — autenticação do painel (PIN com hash scrypt + token assinado HMAC)
+// Gordinho Brindes — autenticação do painel (PIN com hash scrypt + token assinado HMAC).
+// hashPin/verifyPin e os tokens também servem às contas de clientes (server/customers.js).
 import crypto from 'node:crypto';
 import { getPinHash, setPinHash } from './database.js';
 
@@ -15,7 +16,7 @@ export function hashPin(pin) {
   return `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`;
 }
 
-function verifyPin(pin, stored) {
+export function verifyPin(pin, stored) {
   const [scheme, saltHex, hashHex] = String(stored || '').split('$');
   if (scheme !== 'scrypt' || !saltHex || !hashHex) return false;
   const expected = Buffer.from(hashHex, 'hex');
@@ -25,12 +26,16 @@ function verifyPin(pin, stored) {
 
 const sign = (payload) => crypto.createHmac('sha256', secret).update(payload).digest('base64url');
 
-function issueToken() {
-  const payload = Buffer.from(JSON.stringify({ iat: Date.now(), exp: Date.now() + TOKEN_TTL_MS })).toString('base64url');
-  return { token: `${payload}.${sign(payload)}`, expiresAt: Date.now() + TOKEN_TTL_MS };
+// Tokens assinados: sem "aud" = painel admin; aud "customer" = conta de cliente da loja
+export function issueSignedToken(claims = {}, ttlMs = TOKEN_TTL_MS) {
+  const expiresAt = Date.now() + ttlMs;
+  const payload = Buffer.from(JSON.stringify({ ...claims, iat: Date.now(), exp: expiresAt })).toString('base64url');
+  return { token: `${payload}.${sign(payload)}`, expiresAt };
 }
 
-function readToken(token) {
+const issueToken = () => issueSignedToken();
+
+export function readToken(token) {
   const [payload, signature] = String(token || '').split('.');
   if (!payload || !signature) return null;
   const expected = Buffer.from(sign(payload));
@@ -71,7 +76,8 @@ export function requireAdmin(db) {
   return async (req, res, next) => {
     try {
       const token = (req.get('authorization') || '').replace(/^Bearer\s+/i, '');
-      const data = readToken(token);
+      let data = readToken(token);
+      if (data?.aud) data = null; // token de cliente não abre o painel
       const credential = data && (await getPinHash(db));
       if (!data || !credential || data.iat < new Date(credential.updated_at).getTime() - 1000) {
         return res.status(401).json({ error: 'Sessão expirada. Entre novamente no painel.' });

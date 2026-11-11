@@ -12,6 +12,7 @@ const STORAGE_KEYS = {
   CART: 'gordinho_brindes_cart_v1',
   FAVORITES: 'gordinho_brindes_favorites_v1',
   CUSTOMER: 'gordinho_brindes_customer_v1',
+  CUSTOMER_SESSION: 'gordinho_brindes_customer_session_v1',
 };
 
 // Chaves da v1 (dados guardados só no navegador), removidas na primeira carga
@@ -88,13 +89,12 @@ class Database {
     }
   }
 
-  async _api(path, { method = 'GET', body, auth = false } = {}) {
+  // auth: sessão do painel (admin) · customer: sessão do cliente da loja
+  async _api(path, { method = 'GET', body, auth = false, customer = false } = {}) {
     const headers = {};
     if (body !== undefined) headers['Content-Type'] = 'application/json';
-    if (auth) {
-      const token = this.getAuthSession().token;
-      if (token) headers.Authorization = `Bearer ${token}`;
-    }
+    const token = auth ? this.getAuthSession().token : customer ? this.getCustomerSession().token : null;
+    if (token) headers.Authorization = `Bearer ${token}`;
     const res = await fetch(`${API_BASE}${path}`, {
       method,
       headers,
@@ -103,6 +103,7 @@ class Database {
     const data = res.status === 204 ? null : await res.json().catch(() => null);
     if (!res.ok) {
       if (res.status === 401 && auth) this.logout();
+      if (res.status === 401 && customer && token) this.logoutCustomer();
       throw new ApiError(data?.error || `Erro ${res.status} ao falar com o servidor.`, res.status);
     }
     return data;
@@ -408,8 +409,13 @@ class Database {
     return favs.includes(productId);
   }
 
-  // --- CUSTOMER PROFILE (navegador) ---
+  // --- CUSTOMER PROFILE ---
+  // Cliente logado: dados da conta; senão, o que ficou salvo no navegador
   getCustomerProfile() {
+    const account = this.getCustomerAccount();
+    if (account) {
+      return { name: account.name, company: account.company, cnpj: account.cnpj, email: account.email, phone: account.phone };
+    }
     return this._getItem(STORAGE_KEYS.CUSTOMER, {
       name: '',
       company: '',
@@ -417,6 +423,69 @@ class Database {
       email: '',
       phone: '',
     });
+  }
+
+  // --- CONTA DO CLIENTE (Entrar ou Cadastrar) ---
+  getCustomerSession() {
+    return this._getItem(STORAGE_KEYS.CUSTOMER_SESSION, { token: null, expiresAt: 0, customer: null });
+  }
+
+  isCustomerLoggedIn() {
+    const session = this.getCustomerSession();
+    return !!session.token && session.expiresAt > Date.now();
+  }
+
+  getCustomerAccount() {
+    return this.isCustomerLoggedIn() ? this.getCustomerSession().customer : null;
+  }
+
+  async registerCustomer(data) {
+    const session = await this._api('/customers/register', { method: 'POST', body: data });
+    this._setItem(STORAGE_KEYS.CUSTOMER_SESSION, session);
+    return session.customer;
+  }
+
+  async loginCustomer(email, password) {
+    const session = await this._api('/customers/login', { method: 'POST', body: { email, password } });
+    this._setItem(STORAGE_KEYS.CUSTOMER_SESSION, session);
+    return session.customer;
+  }
+
+  logoutCustomer() {
+    this._setItem(STORAGE_KEYS.CUSTOMER_SESSION, { token: null, expiresAt: 0, customer: null });
+  }
+
+  /** Atualiza os dados da conta a partir do servidor (ex.: ao abrir "Minha conta"). */
+  async refreshCustomerAccount() {
+    if (!this.isCustomerLoggedIn()) return null;
+    const customer = await this._api('/customers/me', { customer: true });
+    this._setItem(STORAGE_KEYS.CUSTOMER_SESSION, { ...this.getCustomerSession(), customer });
+    return customer;
+  }
+
+  async updateCustomerAccount(data) {
+    const customer = await this._api('/customers/me', { method: 'PUT', body: data, customer: true });
+    this._setItem(STORAGE_KEYS.CUSTOMER_SESSION, { ...this.getCustomerSession(), customer });
+    return customer;
+  }
+
+  async changeCustomerPassword(currentPassword, newPassword) {
+    const session = await this._api('/customers/me/password', { method: 'PUT', body: { currentPassword, newPassword }, customer: true });
+    this._setItem(STORAGE_KEYS.CUSTOMER_SESSION, session);
+    return true;
+  }
+
+  getCustomerOrders() {
+    return this._api('/customers/me/orders', { customer: true });
+  }
+
+  // Painel: clientes cadastrados e redefinição de senha
+  listCustomers() {
+    return this._api('/admin/customers', { auth: true });
+  }
+
+  resetCustomerPassword(customerId) {
+    return this._api(`/admin/customers/${encodeURIComponent(customerId)}/reset-password`, { method: 'POST', auth: true });
   }
 
   saveCustomerProfile(profile) {
@@ -460,7 +529,8 @@ class Database {
    */
   async addOrder(orderData) {
     const admin = this.isAuthenticated();
-    const order = await this._api(admin ? '/admin/orders' : '/orders', { method: 'POST', body: orderData, auth: admin });
+    // Cliente logado: o pedido fica ligado à conta (aparece em "Meus orçamentos")
+    const order = await this._api(admin ? '/admin/orders' : '/orders', { method: 'POST', body: orderData, auth: admin, customer: !admin && this.isCustomerLoggedIn() });
     if (admin) {
       this.cache.orders = [order, ...this.getOrders()];
       this._notify('orders', this.cache.orders);

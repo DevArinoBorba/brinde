@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Entrar ou Cadastrar | Gordinho Brindes</title>
+  <meta name="description" content="Acesse sua conta Gordinho Brindes para montar orçamentos e acompanhar seus pedidos de brindes personalizados." />
+  <meta name="robots" content="noindex" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/src/auth-page.css" />
+</head>
+<body>
+  <main class="auth-shell">
+    <a href="/" class="auth-back">&larr; Voltar para a loja</a>
+
+    <section class="auth-card" aria-labelledby="auth-title">
+      <header class="auth-brand">
+        <img src="/assets/logo-gordinho.png" alt="" class="auth-logo" width="160" height="72">
+        <h1 id="auth-title" data-store-name>Gordinho Brindes</h1>
+        <p class="auth-tagline">Brindes corporativos personalizados com a sua marca</p>
+      </header>
+
+      <!-- Visitante: Entrar / Cadastrar -->
+      <div id="auth-guest">
+        <div class="auth-tabs" role="tablist">
+          <button type="button" role="tab" class="auth-tab is-active" data-tab="login" aria-selected="true">Entrar</button>
+          <button type="button" role="tab" class="auth-tab" data-tab="register" aria-selected="false">Cadastrar</button>
+        </div>
+
+        <form id="login-form" class="auth-form" data-panel="login" novalidate>
+          <label class="auth-field">
+            <span>E-mail</span>
+            <input type="email" name="email" autocomplete="email" required placeholder="voce@empresa.com.br">
+          </label>
+          <label class="auth-field">
+            <span>Senha</span>
+            <div class="auth-password">
+              <input type="password" name="password" autocomplete="current-password" required placeholder="Sua senha">
+              <button type="button" class="auth-toggle-password" aria-label="Mostrar senha">Mostrar</button>
+            </div>
+          </label>
+          <a href="#" class="auth-link auth-forgot" id="forgot-password">Esqueci minha senha</a>
+          <p class="auth-error" role="alert" hidden></p>
+          <button type="submit" class="auth-submit">Entrar</button>
+        </form>
+
+        <form id="register-form" class="auth-form" data-panel="register" novalidate hidden>
+          <label class="auth-field">
+            <span>Nome completo *</span>
+            <input type="text" name="name" autocomplete="name" required maxlength="120">
+          </label>
+          <div class="auth-row">
+            <label class="auth-field">
+              <span>WhatsApp com DDD *</span>
+              <input type="tel" name="phone" autocomplete="tel" required placeholder="(47) 99999-9999" maxlength="40">
+            </label>
+            <label class="auth-field">
+              <span>E-mail *</span>
+              <input type="email" name="email" autocomplete="email" required maxlength="160">
+            </label>
+          </div>
+          <div class="auth-row">
+            <label class="auth-field">
+              <span>Empresa</span>
+              <input type="text" name="company" autocomplete="organization" maxlength="160">
+            </label>
+            <label class="auth-field">
+              <span>CNPJ</span>
+              <input type="text" name="cnpj" inputmode="numeric" maxlength="20" placeholder="Opcional">
+            </label>
+          </div>
+          <div class="auth-row">
+            <label class="auth-field">
+              <span>Senha *</span>
+              <input type="password" name="password" autocomplete="new-password" required minlength="8" placeholder="Mínimo 8 caracteres">
+            </label>
+            <label class="auth-field">
+              <span>Confirmar senha *</span>
+              <input type="password" name="passwordConfirm" autocomplete="new-password" required minlength="8">
+            </label>
+          </div>
+          <label class="auth-check">
+            <input type="checkbox" name="acceptTerms" required>
+            <span>Li e aceito a <a href="/p/politica-de-privacidade" target="_blank" class="auth-link">Política de Privacidade</a>.</span>
+          </label>
+          <p class="auth-error" role="alert" hidden></p>
+          <button type="submit" class="auth-submit">Criar minha conta</button>
+        </form>
+      </div>
+
+      <!-- Cliente logado: Minha conta -->
+      <div id="auth-account" hidden>
+        <div class="account-hello">
+          <div>
+            <p class="account-kicker">Minha conta</p>
+            <h2>Olá, <span data-customer-first-name></span>!</h2>
+            <p class="account-email" data-customer-email></p>
+          </div>
+          <button type="button" id="logout-button" class="auth-link">Sair</button>
+        </div>
+
+        <div class="auth-tabs" role="tablist">
+          <button type="button" role="tab" class="auth-tab is-active" data-tab="orders" aria-selected="true">Meus orçamentos</button>
+          <button type="button" role="tab" class="auth-tab" data-tab="profile" aria-selected="false">Meus dados</button>
+          <button type="button" role="tab" class="auth-tab" data-tab="password" aria-selected="false">Senha</button>
+        </div>
+
+        <div data-panel="orders" class="account-panel">
+          <div id="account-orders" class="account-orders"><p class="account-empty">Carregando...</p></div>
+          <a href="/" class="auth-submit auth-submit-secondary">Montar novo orçamento</a>
+        </div>
+
+        <form id="profile-form" class="auth-form account-panel" data-panel="profile" novalidate hidden>
+          <label class="auth-field">
+            <span>Nome completo *</span>
+            <input type="text" name="name" autocomplete="name" required maxlength="120">
+          </label>
+          <div class="auth-row">
+            <label class="auth-field">
+              <span>WhatsApp com DDD *</span>
+              <input type="tel" name="phone" autocomplete="tel" required maxlength="40">
+            </label>
+            <label class="auth-field">
+              <span>E-mail</span>
+              <input type="email" name="email" disabled>
+            </label>
+          </div>
+          <div class="auth-row">
+            <label class="auth-field">
+              <span>Empresa</span>
+              <input type="text" name="company" autocomplete="organization" maxlength="160">
+            </label>
+            <label class="auth-field">
+              <span>CNPJ</span>
+              <input type="text" name="cnpj" inputmode="numeric" maxlength="20">
+            </label>
+          </div>
+          <p class="auth-error" role="alert" hidden></p>
+          <p class="auth-success" role="status" hidden>Dados atualizados.</p>
+          <button type="submit" class="auth-submit">Salvar dados</button>
+        </form>
+
+        <form id="password-form" class="auth-form account-panel" data-panel="password" novalidate hidden>
+          <label class="auth-field">
+            <span>Senha atual</span>
+            <input type="password" name="currentPassword" autocomplete="current-password" required>
+          </label>
+          <div class="auth-row">
+            <label class="auth-field">
+              <span>Nova senha</span>
+              <input type="password" name="newPassword" autocomplete="new-password" required minlength="8" placeholder="Mínimo 8 caracteres">
+            </label>
+            <label class="auth-field">
+              <span>Confirmar nova senha</span>
+              <input type="password" name="newPasswordConfirm" autocomplete="new-password" required minlength="8">
+            </label>
+          </div>
+          <p class="auth-error" role="alert" hidden></p>
+          <p class="auth-success" role="status" hidden>Senha alterada.</p>
+          <button type="submit" class="auth-submit">Alterar senha</button>
+        </form>
+      </div>
+
+      <footer class="auth-trust">
+        <span>Conexão segura</span><span aria-hidden="true">·</span><span>SSL</span><span aria-hidden="true">·</span><span>Dados protegidos pela LGPD</span>
+      </footer>
+    </section>
+
+    <p class="auth-copyright">&copy; <span data-year></span> <span data-store-name>Gordinho Brindes</span></p>
+  </main>
+
+  <script type="module" src="/src/auth-page.js"></script>
+</body>
+</html>

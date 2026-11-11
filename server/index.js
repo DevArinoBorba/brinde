@@ -6,6 +6,7 @@ import express from 'express';
 import * as store from './database.js';
 import { ensureAdminCredential, login, changePin, requireAdmin } from './auth.js';
 import * as instagram from './instagram.js';
+import * as customers from './customers.js';
 import { unitPriceForQty, isPriceOnRequest } from '../src/pricing.js';
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -76,14 +77,15 @@ function newOrderId() {
  * Monta o pedido a partir do que veio do navegador. Na loja (público) os preços são
  * recalculados com as faixas do produto; no painel o admin pode informar o valor.
  */
-async function buildOrder(input, { admin }) {
+async function buildOrder(input, { admin, account = null }) {
   if (!isPlainObject(input)) throw new HttpError(400, 'Pedido inválido.');
   const c = isPlainObject(input.customer) ? input.customer : {};
+  // Cliente logado: dados da conta completam o que não veio no formulário
   const customer = {
-    name: text(c.name, 120),
-    company: text(c.company, 160),
-    phone: text(c.phone, 40),
-    email: text(c.email, 160),
+    name: text(c.name, 120) || account?.name || '',
+    company: text(c.company, 160) || account?.company || '',
+    phone: text(c.phone, 40) || account?.phone || '',
+    email: account?.email || text(c.email, 160),
   };
   if (!customer.name) throw new HttpError(400, 'Informe o nome do cliente.');
 
@@ -142,6 +144,7 @@ async function buildOrder(input, { admin }) {
     paymentMethod: text(input.paymentMethod, 120),
     notes: text(input.notes, 1000),
     source: admin ? 'painel' : 'loja',
+    customerId: account?.id || '',
     createdAt: now.toISOString(),
   };
 }
@@ -169,7 +172,8 @@ api.get('/store', asyncRoute(async (req, res) => {
 api.post('/orders',
   rateLimit({ windowMs: 10 * 60 * 1000, max: 15, message: 'Muitos pedidos em pouco tempo. Tente novamente em alguns minutos.' }),
   asyncRoute(async (req, res) => {
-    const order = await store.insertOrder(db, await buildOrder(req.body, { admin: false }));
+    const account = await customers.customerFromRequest(db, req);
+    const order = await store.insertOrder(db, await buildOrder(req.body, { admin: false, account }));
     res.status(201).json(publicOrder(order));
   }));
 
@@ -199,12 +203,50 @@ api.post('/auth/login',
   }));
 
 // ------------------------------------------------------------------
+// Contas de clientes da loja (Entrar ou Cadastrar)
+// ------------------------------------------------------------------
+const customerRoute = (fn) => asyncRoute(async (req, res) => {
+  try {
+    await fn(req, res);
+  } catch (err) {
+    if (err instanceof customers.CustomerError) throw new HttpError(err.status, err.message);
+    throw err;
+  }
+});
+
+api.post('/customers/register',
+  rateLimit({ windowMs: 60 * 60 * 1000, max: 10, message: 'Muitos cadastros a partir desta conexão. Tente mais tarde.' }),
+  customerRoute(async (req, res) => res.status(201).json(await customers.register(db, req.body))));
+
+api.post('/customers/login',
+  rateLimit({ windowMs: 10 * 60 * 1000, max: 10, message: 'Muitas tentativas. Aguarde 10 minutos.' }),
+  customerRoute(async (req, res) => res.json(await customers.login(db, req.body))));
+
+const account = express.Router();
+account.use(customers.requireCustomer(db));
+account.get('/', customerRoute(async (req, res) => res.json(customers.publicCustomer(req.customer))));
+account.put('/', customerRoute(async (req, res) => res.json(await customers.updateProfile(db, req.customer.id, req.body || {}))));
+account.put('/password', customerRoute(async (req, res) => res.json(await customers.changePassword(db, req.customer, req.body || {}))));
+account.get('/orders', customerRoute(async (req, res) => res.json(await store.listOrdersByCustomer(db, req.customer.id))));
+api.use('/customers/me', account);
+
+// ------------------------------------------------------------------
 // API do painel (exige login)
 // ------------------------------------------------------------------
 const admin = express.Router();
 admin.use(requireAdmin(db));
 
 admin.get('/orders', asyncRoute(async (req, res) => res.json(await store.listOrders(db))));
+
+admin.get('/customers', asyncRoute(async (req, res) => {
+  const list = await store.listCustomers(db);
+  res.json(list.map((c) => ({ ...customers.publicCustomer(c), orderCount: c.orderCount })));
+}));
+
+// Cliente esqueceu a senha: o admin gera uma senha temporária e envia pelo WhatsApp
+admin.post('/customers/:id/reset-password', customerRoute(async (req, res) => {
+  res.json(await customers.resetPasswordByAdmin(db, req.params.id));
+}));
 
 admin.post('/orders', asyncRoute(async (req, res) => {
   res.status(201).json(await store.insertOrder(db, await buildOrder(req.body, { admin: true })));
@@ -397,6 +439,7 @@ app.use(express.static(DIST_DIR, {
 
 const sendPage = (file) => (req, res) => res.set('Cache-Control', 'no-cache').sendFile(path.join(DIST_DIR, file));
 app.get(['/admin', '/admin.html'], sendPage('admin.html'));
+app.get(['/auth', '/auth.html', '/minha-conta'], sendPage('auth.html'));
 app.use((req, res, next) => (req.method === 'GET' && !path.extname(req.path) ? sendPage('index.html')(req, res) : next()));
 
 // ------------------------------------------------------------------

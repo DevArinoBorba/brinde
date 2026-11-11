@@ -35,6 +35,15 @@ const SCHEMA = `
     data       BYTEA NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
+  CREATE TABLE IF NOT EXISTS customers (
+    id            TEXT PRIMARY KEY,
+    email         TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    data          JSONB NOT NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    password_changed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS orders_customer_idx ON orders ((data->>'customerId'));
   CREATE TABLE IF NOT EXISTS migrations (
     id         TEXT PRIMARY KEY,
     applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -302,6 +311,62 @@ export async function deleteUnusedMedia(db, keepIds, { olderThanHours = 24, also
     [keepIds, alsoDelete, olderThanHours],
   );
   return rowCount;
+}
+
+// ------------------------------------------------------------------
+// Contas de clientes da loja (e-mail sempre em minúsculas)
+// ------------------------------------------------------------------
+const customerRow = (r) => r && {
+  id: r.id,
+  email: r.email,
+  ...r.data,
+  createdAt: r.created_at,
+  passwordHash: r.password_hash,
+  passwordChangedAt: r.password_changed_at,
+};
+
+export async function insertCustomer(db, { id, email, passwordHash, data }) {
+  const { rows } = await db.query(
+    `INSERT INTO customers (id, email, password_hash, data) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (email) DO NOTHING RETURNING *`,
+    [id, email, passwordHash, data],
+  );
+  return customerRow(rows[0]) || null; // null = e-mail já cadastrado
+}
+
+export async function getCustomerByEmail(db, email) {
+  const { rows } = await db.query('SELECT * FROM customers WHERE email = $1', [email]);
+  return customerRow(rows[0]) || null;
+}
+
+export async function getCustomerById(db, id) {
+  const { rows } = await db.query('SELECT * FROM customers WHERE id = $1', [id]);
+  return customerRow(rows[0]) || null;
+}
+
+export async function updateCustomerData(db, id, data) {
+  const { rows } = await db.query('UPDATE customers SET data = data || $2 WHERE id = $1 RETURNING *', [id, data]);
+  return customerRow(rows[0]) || null;
+}
+
+export async function setCustomerPassword(db, id, passwordHash) {
+  await db.query('UPDATE customers SET password_hash = $2, password_changed_at = now() WHERE id = $1', [id, passwordHash]);
+}
+
+export async function listCustomers(db) {
+  const { rows } = await db.query(
+    `SELECT c.*, (SELECT count(*)::int FROM orders o WHERE o.data->>'customerId' = c.id) AS order_count
+     FROM customers c ORDER BY c.created_at DESC`,
+  );
+  return rows.map((r) => ({ ...customerRow(r), orderCount: r.order_count }));
+}
+
+export async function listOrdersByCustomer(db, customerId) {
+  const { rows } = await db.query(
+    `SELECT data FROM orders WHERE data->>'customerId' = $1 ORDER BY created_at DESC`,
+    [customerId],
+  );
+  return rows.map((r) => r.data);
 }
 
 // Segredos do servidor (nunca expostos pela API pública)

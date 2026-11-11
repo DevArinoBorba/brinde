@@ -127,6 +127,11 @@ function renderAdmin(container) {
             Pedidos & Vendas
           </button>
 
+          <button class="admin-nav-item ${currentTab === 'customers' ? 'active' : ''}" data-tab="customers">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Clientes
+          </button>
+
           <button class="admin-nav-item ${currentTab === 'categories' ? 'active' : ''}" data-tab="categories">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><circle cx="7" cy="7" r=".5" fill="currentColor"/></svg>
             Categorias
@@ -262,6 +267,10 @@ function renderCurrentTab() {
     case 'categories':
       if (titleEl) titleEl.textContent = 'Categorias de Produtos';
       renderCategoriesView(contentEl);
+      break;
+    case 'customers':
+      if (titleEl) titleEl.textContent = 'Clientes Cadastrados';
+      renderCustomersView(contentEl);
       break;
     case 'settings':
       if (titleEl) titleEl.textContent = 'Configurações da Loja & Conteúdo';
@@ -719,6 +728,95 @@ function renderCategoriesView(container) {
   `;
 
   container.querySelector('#btn-add-category')?.addEventListener('click', () => openCategoryModal());
+}
+
+// ----------------------------------------------------
+// 5b. CLIENTES (contas criadas em "Entrar ou Cadastrar" na loja)
+// ----------------------------------------------------
+async function renderCustomersView(container) {
+  container.innerHTML = `
+    <div class="admin-card">
+      <div class="admin-card-header">
+        <div>
+          <h2 class="admin-card-title">Clientes cadastrados na loja</h2>
+          <p style="font-size: 12px; color: #64748B; margin: 4px 0 0 0;">
+            Contas criadas em "Entrar ou Cadastrar". Pedidos feitos com a conta aparecem para o cliente em "Meus orçamentos".
+          </p>
+        </div>
+      </div>
+      <div id="customer-reset-result"></div>
+      <div id="customers-table-wrap"><p style="font-size: 13px; color: #64748B;">Carregando clientes...</p></div>
+    </div>
+  `;
+
+  const wrap = container.querySelector('#customers-table-wrap');
+  let customers;
+  try {
+    customers = await db.listCustomers();
+  } catch (err) {
+    wrap.innerHTML = `<p style="font-size: 13px; color: #B91C1C;">Não foi possível carregar os clientes: ${escapeHtml(err.message)}</p>`;
+    return;
+  }
+  if (!customers.length) {
+    wrap.innerHTML = '<p style="font-size: 13px; color: #64748B;">Nenhum cliente cadastrado ainda.</p>';
+    return;
+  }
+
+  wrap.innerHTML = `
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr><th>Cliente</th><th>Contato</th><th>Cadastro</th><th>Pedidos</th><th style="text-align: right;">Ações</th></tr>
+        </thead>
+        <tbody>
+          ${customers.map(c => {
+            const phone = (c.phone || '').replace(/\D/g, '');
+            return `
+            <tr>
+              <td>
+                <div style="font-weight: 700; color: #0F172A;">${escapeHtml(c.name)}</div>
+                <div style="font-size: 11px; color: #16A34A; font-weight: 700;">${escapeHtml(c.company || 'Pessoa Física')}${c.cnpj ? ` · ${escapeHtml(c.cnpj)}` : ''}</div>
+              </td>
+              <td>
+                <div>${escapeHtml(c.phone || '-')}</div>
+                <div style="color: #64748B; font-size: 11px;">${escapeHtml(c.email)}</div>
+              </td>
+              <td style="font-size: 12px; color: #64748B;">${escapeHtml(new Date(c.createdAt).toLocaleDateString('pt-BR'))}</td>
+              <td><strong>${Number(c.orderCount) || 0}</strong></td>
+              <td style="text-align: right; white-space: nowrap;">
+                ${phone ? `<a href="https://wa.me/${phone.length <= 11 ? '55' + phone : phone}" target="_blank" rel="noopener" class="admin-btn admin-btn-sm" style="background: #25D366; color: #FFFFFF;" title="Conversar no WhatsApp" aria-label="Conversar no WhatsApp">${whatsappIcon(15)}</a>` : ''}
+                <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" data-reset-customer="${escapeHtml(c.id)}" data-customer-name="${escapeHtml(c.name)}" data-customer-phone="${escapeHtml(phone)}">Redefinir senha</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  wrap.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-reset-customer]');
+    if (!btn) return;
+    const name = btn.dataset.customerName;
+    if (!confirm(`Gerar uma senha temporária para ${name}? A senha atual deixa de funcionar.`)) return;
+    btn.disabled = true;
+    try {
+      const { temporaryPassword } = await db.resetCustomerPassword(btn.dataset.resetCustomer);
+      const phone = btn.dataset.customerPhone;
+      const message = `Olá ${name.split(/\s+/)[0]}! Sua senha temporária para entrar no site é: ${temporaryPassword}\nDepois de entrar, troque em Minha conta > Senha.`;
+      container.querySelector('#customer-reset-result').innerHTML = `
+        <div style="background: #FEF9C3; border: 1px solid #FDE68A; border-radius: 12px; padding: 14px; margin-bottom: 16px; font-size: 13px;">
+          Senha temporária de <strong>${escapeHtml(name)}</strong>:
+          <code style="font-size: 15px; font-weight: 800; background: #fff; padding: 2px 8px; border-radius: 6px; margin: 0 6px;">${escapeHtml(temporaryPassword)}</code>
+          ${phone ? `<a href="https://wa.me/${phone.length <= 11 ? '55' + phone : phone}?text=${encodeURIComponent(message)}" target="_blank" rel="noopener" class="admin-btn admin-btn-sm" style="background: #25D366; color: #FFFFFF;">${whatsappIcon(14)}<span>Enviar ao cliente</span></a>` : ''}
+          <div style="color: #854D0E; margin-top: 6px; font-size: 12px;">Ela só aparece agora. Envie ao cliente e peça para trocar depois de entrar.</div>
+        </div>`;
+    } catch (err) {
+      showToast(`Não foi possível redefinir: ${err.message}`, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }
 
 // ----------------------------------------------------

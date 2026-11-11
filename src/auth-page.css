@@ -1,0 +1,231 @@
+/* Gordinho Brindes — página Entrar ou Cadastrar / Minha conta (/auth) */
+:root {
+  --gold: #FAB818;
+  --gold-hover: #E5A50E;
+  --forest: #0F3822;
+  --forest-dark: #0A2717;
+  --forest-deep: #06180E;
+  --emerald: #16A34A;
+  --ink: #0A2717;
+  --muted: #64748B;
+  --line: #E2E8F0;
+  --surface: #F8FAFC;
+  --danger: #DC2626;
+  --font-heading: 'Outfit', system-ui, sans-serif;
+  --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  font-family: var(--font-body);
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(250, 184, 24, 0.14), transparent 60%),
+    radial-gradient(900px 500px at 110% 110%, rgba(34, 197, 94, 0.12), transparent 60%),
+    linear-gradient(160deg, var(--forest) 0%, var(--forest-dark) 45%, var(--forest-deep) 100%);
+}
+
+[hidden] { display: none !important; }
+
+.auth-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 72px 16px 32px;
+  position: relative;
+}
+
+.auth-back {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  color: #D2E4D8;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+.auth-back:hover { color: var(--gold); }
+
+.auth-card {
+  width: 100%;
+  max-width: 520px;
+  background: #FFFFFF;
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.55);
+}
+
+.auth-brand { text-align: center; margin-bottom: 24px; }
+.auth-logo { height: 64px; width: auto; }
+.auth-brand h1 {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 26px;
+  margin: 10px 0 4px;
+  color: var(--forest-dark);
+}
+.auth-tagline {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--emerald);
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  margin-bottom: 20px;
+}
+.auth-tab {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font: 700 14px var(--font-body);
+  color: var(--muted);
+  cursor: pointer;
+}
+.auth-tab.is-active {
+  background: var(--forest-dark);
+  color: #FFFFFF;
+  box-shadow: 0 6px 16px -8px rgba(10, 39, 23, 0.6);
+}
+
+.auth-form { display: flex; flex-direction: column; gap: 14px; }
+.auth-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.auth-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; }
+.auth-field input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  font: 500 15px var(--font-body);
+  color: var(--ink);
+  background: #FFFFFF;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.auth-field input:focus {
+  outline: none;
+  border-color: var(--forest);
+  box-shadow: 0 0 0 4px rgba(15, 56, 34, 0.12);
+}
+.auth-field input:disabled { background: var(--surface); color: var(--muted); }
+
+.auth-password { position: relative; }
+.auth-password input { padding-right: 84px; }
+.auth-toggle-password {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  font: 700 12px var(--font-body);
+  color: var(--forest);
+  cursor: pointer;
+  padding: 6px 8px;
+}
+
+.auth-check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: #334155; }
+.auth-check input { margin-top: 2px; width: 16px; height: 16px; accent-color: var(--forest); }
+
+.auth-link {
+  color: var(--forest);
+  font-weight: 700;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--font-body);
+}
+.auth-forgot { align-self: flex-end; margin-top: -6px; }
+
+.auth-submit {
+  display: block;
+  width: 100%;
+  text-align: center;
+  text-decoration: none;
+  border: 0;
+  border-radius: 14px;
+  padding: 14px 18px;
+  background: var(--gold);
+  color: var(--forest-dark);
+  font: 800 15px var(--font-heading);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 150ms ease, transform 150ms ease;
+}
+.auth-submit:hover { background: var(--gold-hover); }
+.auth-submit:active { transform: translateY(1px); }
+.auth-submit:disabled { opacity: 0.6; cursor: progress; }
+.auth-submit-secondary { background: var(--surface); border: 1.5px solid var(--line); margin-top: 16px; }
+.auth-submit-secondary:hover { background: #EEF2F6; }
+
+.auth-error, .auth-success {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.auth-error { background: #FEF2F2; color: var(--danger); border: 1px solid #FECACA; }
+.auth-success { background: #F0FDF4; color: var(--emerald); border: 1px solid #BBF7D0; }
+
+.auth-trust {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+.auth-copyright { color: #8FB49C; font-size: 12px; margin: 20px 0 0; }
+
+/* Minha conta */
+.account-hello { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+.account-kicker { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--emerald); }
+.account-hello h2 { font-family: var(--font-heading); font-size: 22px; margin: 4px 0 2px; }
+.account-email { margin: 0; color: var(--muted); font-size: 13px; }
+
+.account-orders { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; }
+.account-empty { margin: 0; padding: 18px; text-align: center; color: var(--muted); background: var(--surface); border-radius: 12px; font-size: 14px; }
+.account-order { border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.account-order-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.account-order-id { font-weight: 800; font-size: 14px; }
+.account-order-status {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #FEF9C3;
+  color: #854D0E;
+}
+.account-order-status[data-status="Aprovado"], .account-order-status[data-status="Em Produção"] { background: #DBEAFE; color: #1E40AF; }
+.account-order-status[data-status="Enviado"], .account-order-status[data-status="Concluído"] { background: #DCFCE7; color: #166534; }
+.account-order-status[data-status="Cancelado"] { background: #FEE2E2; color: #991B1B; }
+.account-order-meta { font-size: 12px; color: var(--muted); }
+.account-order-items { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: #334155; }
+
+@media (max-width: 560px) {
+  .auth-card { padding: 24px 18px; border-radius: 20px; }
+  .auth-row { grid-template-columns: 1fr; }
+  .auth-back { left: 16px; }
+}

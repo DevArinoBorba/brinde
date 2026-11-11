@@ -73,6 +73,16 @@ function syncStorefrontWithDB() {
 
   // Update cart badge counters
   updateCartCounters();
+  updateAccountHeader();
+}
+
+// "Entrar ou Cadastrar" vira "Olá, Nome / Minha conta" com o cliente logado
+function updateAccountHeader() {
+  const account = db.getCustomerAccount();
+  const firstName = account?.name?.split(/\s+/)[0];
+  document.querySelectorAll('[data-account-line1]').forEach(el => (el.textContent = account ? `Olá, ${firstName}` : 'Entrar ou'));
+  document.querySelectorAll('[data-account-line2]').forEach(el => (el.textContent = account ? 'Minha conta' : 'Cadastrar'));
+  document.querySelectorAll('a[href="/auth"] button').forEach(btn => btn.setAttribute('aria-label', account ? 'Minha conta' : 'Entrar ou cadastrar'));
 }
 
 function updateCartCounters() {
@@ -497,6 +507,9 @@ function openOrderModal(product) {
 
   let selectedQty = 100;
   let selectedColor = (product.colorNames && product.colorNames[0]) ? product.colorNames[0].name : 'Cor Padrão';
+  // Cliente logado: formulário já vem preenchido com os dados da conta
+  const profile = db.getCustomerProfile();
+
   // Produto sem preço: valor "sob consulta", combinado pelo WhatsApp
   const onRequest = db.isPriceOnRequest(product);
   let unitPrice = onRequest ? 0 : db.getUnitPriceForQty(product, selectedQty);
@@ -575,22 +588,22 @@ function openOrderModal(product) {
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <div class="admin-form-group">
             <label class="admin-form-label" style="font-weight: 700; font-size: 12px;">Seu Nome *</label>
-            <input type="text" id="order-cust-name" class="admin-input" required placeholder="Ex: Roberto Alves">
+            <input type="text" id="order-cust-name" class="admin-input" required placeholder="Ex: Roberto Alves" value="${escapeHtml(profile.name)}">
           </div>
           <div class="admin-form-group">
             <label class="admin-form-label" style="font-weight: 700; font-size: 12px;">Empresa / Razão Social</label>
-            <input type="text" id="order-cust-company" class="admin-input" placeholder="Ex: Agência Criativa">
+            <input type="text" id="order-cust-company" class="admin-input" placeholder="Ex: Agência Criativa" value="${escapeHtml(profile.company)}">
           </div>
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <div class="admin-form-group">
             <label class="admin-form-label" style="font-weight: 700; font-size: 12px;">WhatsApp com DDD *</label>
-            <input type="text" id="order-cust-phone" class="admin-input" required placeholder="(47) 99999-9999">
+            <input type="text" id="order-cust-phone" class="admin-input" required placeholder="(47) 99999-9999" value="${escapeHtml(profile.phone)}">
           </div>
           <div class="admin-form-group">
             <label class="admin-form-label" style="font-weight: 700; font-size: 12px;">E-mail Corporativo *</label>
-            <input type="email" id="order-cust-email" class="admin-input" required placeholder="contato@empresa.com.br">
+            <input type="email" id="order-cust-email" class="admin-input" required placeholder="contato@empresa.com.br" value="${escapeHtml(profile.email)}">
           </div>
         </div>
 
@@ -1265,6 +1278,10 @@ function setupInstitutionalLinks() {
       openInstitutionalModal(pageInfo);
     }
   });
+
+  // Acesso direto pela URL (ex.: link da Política de Privacidade na página de cadastro)
+  const directPage = institutionalPages[window.location.pathname];
+  if (directPage) openInstitutionalModal(directPage);
 }
 
 function openInstitutionalModal({ title, content, isTracker }) {
